@@ -14,9 +14,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx",
-    "types": ["@cloudflare/workers-types"]
+    "jsx": "react-jsx"
   },
-  "include": ["src", "worker"],
+  "include": ["src", "api", "scripts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
