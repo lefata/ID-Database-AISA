@@ -1,0 +1,5 @@
+{
+  "name": "Synergy ID Repository",
+  "description": "A modern web application to manage and browse ID profiles for staff, students, and parents. The system allows for creating categorized profiles with photos and associations, such as linking students to their guardians.",
+  "requestFramePermissions": []
+}
