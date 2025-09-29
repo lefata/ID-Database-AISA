@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { serveStatic } from 'hono/cloudflare-workers';
 import { GoogleGenAI } from '@google/genai';
 import { PersonCategory } from '../src/types';
 
@@ -27,6 +26,9 @@ type NewPersonData = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 // --- API ROUTES ---
+// Create a new Hono instance dedicated to API routes
+const api = new Hono<{ Bindings: Bindings }>();
+
 
 // Helper function to generate a bio using Gemini
 const generateBio = async (
@@ -48,7 +50,7 @@ const generateBio = async (
 };
 
 // Legacy endpoint for AddPersonForm to generate bios
-app.post('/api/generate-bio', async (c) => {
+api.post('/generate-bio', async (c) => {
   const ai = new GoogleGenAI({ apiKey: c.env.API_KEY_ALIAS_FOR_GEMINI });
   try {
     const { firstName, lastName, category, roleOrClass } = await c.req.json();
@@ -65,7 +67,7 @@ app.post('/api/generate-bio', async (c) => {
 
 
 // GET all people
-app.get('/api/people', async (c) => {
+api.get('/people', async (c) => {
   try {
     const { results } = await c.env.DB.prepare("SELECT * FROM people ORDER BY lastName, firstName").all();
     // Parse guardianIds from JSON string to number array
@@ -81,7 +83,7 @@ app.get('/api/people', async (c) => {
 });
 
 // POST (create) new people
-app.post('/api/people', async (c) => {
+api.post('/people', async (c) => {
   const ai = new GoogleGenAI({ apiKey: c.env.API_KEY_ALIAS_FOR_GEMINI });
   const peopleToAdd: NewPersonData[] = await c.req.json();
 
@@ -157,10 +159,14 @@ app.post('/api/people', async (c) => {
   }
 });
 
+// Mount the API router under the /api path.
+// All requests to /api/* will be handled by the 'api' Hono instance.
+app.route('/api', api);
 
 // --- STATIC ASSETS ---
-// Serve static assets from the 'dist' folder (our built React app)
-app.get('*', serveStatic({ root: './' }));
-
+// Static assets are now handled exclusively by the `site.bucket = "./dist"`
+// configuration in `wrangler.toml`. This is the standard practice for
+// Cloudflare Pages and avoids routing conflicts. We no longer need a
+// fallback route in the worker.
 
 export default app;
