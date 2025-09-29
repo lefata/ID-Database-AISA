@@ -122,11 +122,10 @@ api.post('/people', async (c) => {
         let nonStudentIndex = 0;
         for (const personData of peopleToAdd) {
             if (personData.category !== PersonCategory.STUDENT) {
-                 // D1 batch returns results with meta, but in local testing it can be null.
-                 // Assuming order is preserved and success.
-                // FIX: Replaced generic type argument with a type cast to fix untyped function call error.
-                const newId = (results[nonStudentIndex]?.meta?.last_row_id) ?? (await c.env.DB.prepare("SELECT last_insert_rowid() as id").first() as {id: number})!.id;
-                tempIdToNewIdMap[personData.tempId] = newId;
+                const newId = results[nonStudentIndex]?.meta?.last_row_id;
+                if (newId) {
+                  tempIdToNewIdMap[personData.tempId] = newId;
+                }
                 nonStudentIndex++;
             }
         }
@@ -160,13 +159,10 @@ api.post('/people', async (c) => {
 });
 
 // Mount the API router under the /api path.
-// All requests to /api/* will be handled by the 'api' Hono instance.
 app.route('/api', api);
 
-// --- STATIC ASSETS ---
-// Static assets are now handled exclusively by the `site.bucket = "./dist"`
-// configuration in `wrangler.toml`. This is the standard practice for
-// Cloudflare Pages and avoids routing conflicts. We no longer need a
-// fallback route in the worker.
+// With the `_worker.js` setup for Cloudflare Pages, static assets in the `dist`
+// directory are automatically served. Requests that don't match a static file
+// (like our `/api/*` calls) are passed to this worker.
 
 export default app;
