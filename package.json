@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "deploy": "npm run build && wrangler deploy",
+    "db:setup": "./setup-db.sh",
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "db:seed": "wrangler d1 execute DB --local --file=./seed.sql"
   },
