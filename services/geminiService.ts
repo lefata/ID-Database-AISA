@@ -1,8 +1,4 @@
-
-import { GoogleGenAI } from "@google/genai";
-import { Person, PersonCategory } from '../types';
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+import { PersonCategory } from '../types';
 
 export const generateBio = async (
   firstName: string,
@@ -10,19 +6,17 @@ export const generateBio = async (
   category: PersonCategory,
   roleOrClass: string
 ): Promise<string> => {
-  const roleDescription = category === PersonCategory.STUDENT ? `a student in ${roleOrClass}` : `a ${roleOrClass}`;
-  
-  const prompt = `Generate a short, positive, one-sentence professional description for ${firstName} ${lastName}, who is ${roleDescription}. Keep it under 20 words. Example: 'A dedicated educator shaping future minds.' or 'An enthusiastic learner with a bright future.'`;
+  const response = await fetch('/api/generate-bio', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ firstName, lastName, category, roleOrClass }),
+  });
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    return response.text.trim();
-  } catch (error) {
-    console.error("Error generating bio with Gemini:", error);
-    // Return a fallback bio on error
-    return "A valued member of our community.";
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({ error: 'Failed to generate bio' }));
+    throw new Error(errorBody.error || 'An unknown error occurred while generating bio.');
   }
+  
+  const { bio } = await response.json();
+  return bio;
 };
