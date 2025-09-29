@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { IdRepository } from './components/IdRepository';
@@ -22,7 +21,7 @@ const initialPeople: Person[] = [
         category: PersonCategory.PARENT,
         firstName: 'Marcus',
         lastName: 'Cole',
-        role: 'Parent',
+        role: 'Parent/Guardian',
         image: 'https://picsum.photos/seed/marcus/200/200',
         bio: 'An engaged parent committed to supporting the school community.',
         googleSheetId: 'GS-19283',
@@ -32,7 +31,7 @@ const initialPeople: Person[] = [
         category: PersonCategory.PARENT,
         firstName: 'Olivia',
         lastName: 'Chen',
-        role: 'Parent',
+        role: 'Parent/Guardian',
         image: 'https://picsum.photos/seed/olivia/200/200',
         bio: 'A creative and supportive presence in our community.',
         googleSheetId: 'GS-55431',
@@ -54,8 +53,8 @@ const App: React.FC = () => {
     const [view, setView] = useState<'repository' | 'add'>('repository');
     const [people, setPeople] = useState<Person[]>(initialPeople);
 
-    const handleAddPerson = (newPerson: Person) => {
-        setPeople(prevPeople => [newPerson, ...prevPeople]);
+    const handleAddPeople = (newPeople: Person[]) => {
+        setPeople(prevPeople => [...newPeople, ...prevPeople]);
         setView('repository'); // Switch back to repository view after adding
     };
 
@@ -64,7 +63,7 @@ const App: React.FC = () => {
             <Header currentView={view} onViewChange={setView} />
             <main>
                 {view === 'repository' && <IdRepository people={people} />}
-                {view === 'add' && <AddPersonForm onAddPerson={handleAddPerson} people={people}/>}
+                {view === 'add' && <AddPersonForm onAddPeople={handleAddPeople} people={people}/>}
             </main>
         </div>
     );
