@@ -35,7 +35,7 @@ const generateBio = async (
   const prompt = `Generate a short, positive, one-sentence professional description for ${firstName} ${lastName}, who is ${roleDescription}. Keep it under 20 words. Example: 'A dedicated educator shaping future minds.' or 'An enthusiastic learner with a bright future.'`;
   try {
     const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
-    return response.text.trim();
+    return (response.text ?? '').trim();
   } catch (error) {
     console.error("Error generating bio with Gemini:", error);
     return "A valued member of our community.";
@@ -97,7 +97,7 @@ app.post('/people', async (c) => {
 
         await sql`
             INSERT INTO people (category, firstName, lastName, image, class, guardianIds, bio, googleSheetId)
-            VALUES (${student.category}, ${student.firstName}, ${student.lastName}, ${student.image}, ${student.class}, ${allGuardianIds}, ${bio}, ${googleSheetId});
+            VALUES (${student.category}, ${student.firstName}, ${student.lastName}, ${student.image}, ${student.class}, ${allGuardianIds as any}, ${bio}, ${googleSheetId});
         `;
     }
 
