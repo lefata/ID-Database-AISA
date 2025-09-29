@@ -90,7 +90,9 @@ Follow these steps to get the project running on your local machine.
     ```
 
 2.  **Seed the database:**
-    Run the setup script to seed your new table with initial data. This script uses the `SUPABASE_SERVICE_KEY` from your `.env` file.
+    First, ensure you have created the `people` table using the SQL command in the step above.
+
+    Then, run the setup script to check for the table and seed it with initial data. This script uses the `SUPABASE_SERVICE_KEY` from your `.env` file. If the table is missing, the script will fail and print the required SQL command again for convenience.
 
     ```bash
     npm run db:setup
