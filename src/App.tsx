@@ -69,7 +69,7 @@ const AppContent: React.FC = () => {
         
         switch (view) {
             case 'repository':
-                return <IdRepository people={people} settings={settings} />;
+                return <IdRepository people={people} settings={settings} onSuccess={handleSuccess} />;
             case 'add':
                 return <AddPersonForm onSuccess={handleSuccess} people={people} />;
             case 'admin':

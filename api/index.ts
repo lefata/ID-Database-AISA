@@ -176,6 +176,46 @@ app.post('/people', async (c) => {
   }
 });
 
+app.put('/people/:id', async (c) => {
+    const user = c.get('user');
+    if (user.user_metadata?.role !== 'admin') {
+        return c.json({ error: 'Forbidden: Admins only' }, 403);
+    }
+
+    const id = c.req.param('id');
+    const updateData = await c.req.json();
+    
+    // Sanitize the payload to only include fields that can be updated
+    const { firstName, lastName, role, class: personClass, image, guardianIds } = updateData;
+    
+    const payload: { [key: string]: any } = {};
+    if (firstName) payload.firstName = firstName;
+    if (lastName) payload.lastName = lastName;
+    if (role) payload.role = role;
+    if (personClass) payload.class = personClass;
+    if (image) payload.image = image;
+    // Only include guardianIds if it's an array (even if empty)
+    if (Array.isArray(guardianIds)) {
+        payload.guardianIds = guardianIds;
+    }
+    
+    if (Object.keys(payload).length === 0) {
+        return c.json({ error: 'No update data provided' }, 400);
+    }
+
+    const { error } = await supabase
+        .from('people')
+        .update(payload)
+        .eq('id', id);
+
+    if (error) {
+        console.error('Supabase update error:', error);
+        return c.json({ error: 'Failed to update person', details: error.message }, 500);
+    }
+
+    return c.json({ success: true });
+});
+
 
 // --- ADMIN-ONLY ROUTES ---
 const adminApp = new Hono<AppContext>();
@@ -200,7 +240,8 @@ adminApp.get('/pending-users', async (c) => {
         return c.json({ error: 'Failed to list users', details: listUsersResponse.error.message }, 500);
     }
     const pendingUsers = listUsersResponse.data.users
-        .filter(user => !user.email_confirmed_at)
+        // FIX: Explicitly type 'user' to resolve a type inference issue where it was being inferred as 'never'.
+        .filter((user: User) => !user.email_confirmed_at)
         .map(user => ({
             id: user.id,
             email: user.email,

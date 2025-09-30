@@ -1,11 +1,14 @@
 import React from 'react';
 import { Person, PersonCategory } from '../types';
 import { UserIcon } from './icons/UserIcon';
+import { useAuth } from '../contexts/AuthContext';
+import { EditIcon } from './icons/EditIcon';
 
 interface IdCardProps {
     person: Person;
     allPeople: Person[];
     googleSheetUrl: string;
+    onEdit: (person: Person) => void;
 }
 
 const categoryStyles = {
@@ -26,8 +29,9 @@ const categoryStyles = {
     },
 };
 
-export const IdCard: React.FC<IdCardProps> = ({ person, allPeople, googleSheetUrl }) => {
+export const IdCard: React.FC<IdCardProps> = ({ person, allPeople, googleSheetUrl, onEdit }) => {
     const styles = categoryStyles[person.category];
+    const { isAdmin } = useAuth();
 
     const getGuardianName = (id: number) => {
         const guardian = allPeople.find(p => p.id === id);
@@ -55,7 +59,16 @@ export const IdCard: React.FC<IdCardProps> = ({ person, allPeople, googleSheetUr
     }
 
     return (
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 ease-in-out">
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 ease-in-out relative">
+            {isAdmin && (
+                <button
+                    onClick={() => onEdit(person)}
+                    className="absolute top-2 right-2 p-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+                    aria-label="Edit profile"
+                >
+                    <EditIcon className="w-4 h-4" />
+                </button>
+            )}
             <div className={`h-2 ${styles.bg}`}></div>
             <div className="p-6">
                 <div className="flex items-center space-x-4">
