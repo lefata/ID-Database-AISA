@@ -18,8 +18,8 @@ export const LoginPage: React.FC = () => {
     
     try {
       if (isSignUp) {
-        if (!email.endsWith('@aisabuja')) {
-            throw new Error('Sign-up is restricted to @aisabuja emails only.');
+        if (!email.endsWith('@aisabuja.com')) {
+            throw new Error('Sign-up is restricted to @aisabuja.com emails only.');
         }
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
