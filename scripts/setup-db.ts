@@ -42,6 +42,38 @@ CREATE POLICY "Allow admin update access" ON public.people FOR UPDATE USING (is_
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow authenticated read access on settings" ON public.settings FOR SELECT TO authenticated USING (TRUE);
 CREATE POLICY "Allow admin update access on settings" ON public.settings FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
+
+-- 5. Create a trigger to make the first user an admin
+CREATE OR REPLACE FUNCTION public.grant_first_user_admin()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Check if this is the very first user
+  IF (SELECT count(*) FROM auth.users) = 1 THEN
+    -- If so, grant admin role and confirm their email
+    UPDATE auth.users
+    SET
+      user_metadata = jsonb_set(
+        COALESCE(user_metadata, '{}'::jsonb),
+        '{role}',
+        '"admin"'::jsonb
+      ),
+      email_confirmed_at = NOW()
+    WHERE id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- Drop the trigger if it already exists to ensure idempotency
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+-- Add the trigger to the auth.users table
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.grant_first_user_admin();
 `.trim();
 
 
