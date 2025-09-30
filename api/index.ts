@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
 import { GoogleGenAI } from '@google/genai';
 import { PersonCategory } from '../src/types';
-import { supabase } from './supabaseClient';
-import type { User } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
+import type { User, SupabaseClient } from '@supabase/supabase-js';
 
 export const config = {
   runtime: 'edge',
@@ -24,6 +24,7 @@ type NewPersonData = {
 type AppContext = {
   Variables: {
     user: User;
+    supabase: SupabaseClient;
   };
 };
 
@@ -36,12 +37,24 @@ app.use('/*', async (c, next) => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
-  const token = authHeader.substring(7);
-  const { data, error } = await supabase.auth.getUser(token);
+
+  // Create a new Supabase client for this request, authenticated with the user's token.
+  // This ensures that all database operations respect Row Level Security policies.
+  const supabase = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_ANON_KEY!,
+    {
+      global: { headers: { Authorization: authHeader } },
+      auth: { autoRefreshToken: false, persistSession: false },
+    }
+  );
+
+  const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     return c.json({ error: 'Invalid token' }, 401);
   }
   c.set('user', data.user);
+  c.set('supabase', supabase); // Pass the authenticated client to the routes
   await next();
 });
 
@@ -60,6 +73,7 @@ const generateBio = async (ai: GoogleGenAI, firstName: string, lastName: string,
 
 // --- SETTINGS ROUTES ---
 app.get('/settings', async (c) => {
+    const supabase = c.get('supabase');
     const { data, error } = await supabase.from('settings').select('key, value');
     if (error) {
         console.error('Supabase settings fetch error:', error);
@@ -75,6 +89,7 @@ app.get('/settings', async (c) => {
 
 app.put('/settings', async (c) => {
     const user = c.get('user');
+    const supabase = c.get('supabase');
     // Double-check for admin role on the server
     if (user.user_metadata?.role !== 'admin') {
         return c.json({ error: 'Forbidden: Admins only' }, 403);
@@ -97,6 +112,7 @@ app.put('/settings', async (c) => {
 
 // --- PEOPLE ROUTES ---
 app.get('/people', async (c) => {
+  const supabase = c.get('supabase');
   const { data, error } = await supabase.from('people').select('*').order('lastName').order('firstName');
   if (error) {
     console.error('Supabase fetch error:', error);
@@ -106,6 +122,7 @@ app.get('/people', async (c) => {
 });
 
 app.post('/people', async (c) => {
+  const supabase = c.get('supabase');
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY_ALIAS_FOR_GEMINI! });
   const peopleToAdd: NewPersonData[] = await c.req.json();
 
@@ -176,6 +193,7 @@ app.post('/people', async (c) => {
 
 app.put('/people/:id', async (c) => {
     const user = c.get('user');
+    const supabase = c.get('supabase');
     if (user.user_metadata?.role !== 'admin') {
         return c.json({ error: 'Forbidden: Admins only' }, 403);
     }
