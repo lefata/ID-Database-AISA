@@ -73,7 +73,11 @@ const PendingUsers: React.FC = () => {
         <div className="p-6 mt-8 bg-white rounded-lg shadow-md">
             <h3 className="text-lg font-medium leading-6 text-slate-900">Pending User Approvals</h3>
             <div className="mt-4">
-                {isLoading && <p>Loading users...</p>}
+                {isLoading && (
+                    <div className="flex justify-center items-center py-8">
+                        <SpinnerIcon className="w-8 h-8 text-sky-600" />
+                    </div>
+                )}
                 {error && <p className="text-sm text-red-600">{error}</p>}
                 {!isLoading && !error && pendingUsers.length === 0 && <p className="text-sm text-slate-500">No users are currently awaiting approval.</p>}
                 {pendingUsers.length > 0 && (

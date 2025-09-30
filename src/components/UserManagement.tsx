@@ -97,7 +97,11 @@ export const UserManagement: React.FC = () => {
                 <h3 className="text-lg font-medium leading-6 text-slate-900">User Management</h3>
                 <p className="mt-1 text-sm text-slate-500">Promote users to administrators or revoke admin privileges.</p>
                 <div className="mt-4">
-                    {isLoading && <p>Loading users...</p>}
+                    {isLoading && (
+                        <div className="flex justify-center items-center py-8">
+                           <SpinnerIcon className="w-8 h-8 text-sky-600" />
+                       </div>
+                    )}
                     {error && <p className="text-sm text-red-600">{error}</p>}
                     {!isLoading && !error && (
                         <div className="overflow-x-auto">

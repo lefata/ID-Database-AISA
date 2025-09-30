@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
-import { GoogleGenAI } from '@google/genai';
+// FIX: Import GenerateContentResponse to correctly type the response from the Gemini API.
+import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import type { User, SupabaseClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
@@ -168,7 +169,8 @@ const generateBio = async (ai: GoogleGenAI, firstName: string, lastName: string,
     const prompt = `Generate a short, positive, one-sentence professional description for ${firstName} ${lastName}, who is ${roleDescription}. Keep it under 20 words. Example: 'A dedicated educator shaping future minds.' or 'An enthusiastic learner with a bright future.'`;
     const fallbackBio = "A valued member of our community.";
     try {
-        const response = await withTimeout(
+        // FIX: Explicitly type the awaited response to resolve the 'Property 'text' does not exist on type 'unknown'' error.
+        const response = await withTimeout<GenerateContentResponse>(
             ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt }),
             20000 // 20-second timeout
         );

@@ -7,6 +7,7 @@ import { LoginPage } from './pages/LoginPage';
 import { Person, Settings } from './types';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { supabase } from './lib/supabaseClient';
+import { SpinnerIcon } from './components/icons/SpinnerIcon';
 
 type View = 'repository' | 'add' | 'admin';
 
@@ -52,7 +53,11 @@ const AppContent: React.FC = () => {
     };
 
     if (loading) {
-        return <div className="flex items-center justify-center h-screen">Loading...</div>;
+        return (
+            <div className="flex items-center justify-center h-screen bg-slate-50">
+                <SpinnerIcon className="w-12 h-12 text-sky-600" />
+            </div>
+        );
     }
 
     if (!session) {
@@ -60,7 +65,11 @@ const AppContent: React.FC = () => {
     }
 
     const renderContent = () => {
-        if (isLoading) return <div className="text-center p-10">Loading Data...</div>;
+        if (isLoading) return (
+            <div className="flex items-center justify-center h-96">
+                <SpinnerIcon className="w-10 h-10 text-sky-600" />
+            </div>
+        );
         if (error) return <div className="text-center p-10 text-red-600">Error: {error}</div>;
         
         switch (view) {
