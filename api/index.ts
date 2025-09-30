@@ -221,7 +221,6 @@ app.put('/people/:id', async (c) => {
 const adminApp = new Hono<AppContext>();
 
 // Middleware to ensure only admins can access these routes
-// FIX: Added async/await to conform to Hono's middleware type signature.
 adminApp.use('/*', async (c, next) => {
     const user = c.get('user');
     if (user.user_metadata?.role !== 'admin') {
@@ -232,21 +231,23 @@ adminApp.use('/*', async (c, next) => {
 
 // Get users pending confirmation
 adminApp.get('/pending-users', async (c) => {
-    // FIX: Avoided destructuring to help TypeScript correctly infer types from the Supabase response union.
-    const listUsersResponse = await supabaseAdmin.auth.admin.listUsers({
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
         perPage: 1000,
     });
-    if (listUsersResponse.error) {
-        return c.json({ error: 'Failed to list users', details: listUsersResponse.error.message }, 500);
+
+    if (error) {
+        return c.json({ error: 'Failed to list users', details: error.message }, 500);
     }
-    const pendingUsers = listUsersResponse.data.users
-        // FIX: Explicitly type 'user' to resolve a type inference issue where it was being inferred as 'never'.
+
+    const pendingUsers = data.users
+        // FIX: Explicitly type `user` to fix a TypeScript inference issue where it was being inferred as `never`.
         .filter((user: User) => !user.email_confirmed_at)
         .map(user => ({
             id: user.id,
             email: user.email,
             created_at: user.created_at,
         }));
+        
     return c.json(pendingUsers);
 });
 
