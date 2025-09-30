@@ -6,6 +6,33 @@ import type { User, SupabaseClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
 
 // --- START: Merged from googleSheetsClient.ts and types.ts ---
+
+/**
+ * A helper function to wrap a promise with a timeout.
+ * @param promise The promise to wrap.
+ * @param ms The timeout duration in milliseconds.
+ * @returns A new promise that rejects if the original promise doesn't resolve in time.
+ */
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Operation timed out after ${ms}ms`));
+    }, ms);
+
+    promise.then(
+      (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+};
+
+
 // Cache the Google Sheets client so we don't re-authenticate on every request
 let sheets: any;
 
@@ -51,10 +78,15 @@ async function getSheetIdForStudent(firstName: string, lastName: string): Promis
     const range = `${sheetName}!A:M`;
 
     try {
-        const response = await client.spreadsheets.values.get({
-            spreadsheetId: sheetId,
-            range: range,
-        });
+        const response = await client.spreadsheets.values.get(
+            {
+                spreadsheetId: sheetId,
+                range: range,
+            },
+            {
+                timeout: 20000, // 20-second timeout
+            }
+        );
 
         const rows = response.data.values;
         if (rows && rows.length) {
@@ -134,12 +166,17 @@ app.use('/*', async (c, next) => {
 const generateBio = async (ai: GoogleGenAI, firstName: string, lastName: string, category: PersonCategory, roleOrClass: string): Promise<string> => {
     const roleDescription = category === PersonCategory.STUDENT ? `a student in ${roleOrClass}` : `a ${roleOrClass}`;
     const prompt = `Generate a short, positive, one-sentence professional description for ${firstName} ${lastName}, who is ${roleDescription}. Keep it under 20 words. Example: 'A dedicated educator shaping future minds.' or 'An enthusiastic learner with a bright future.'`;
+    const fallbackBio = "A valued member of our community.";
     try {
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
-        return (response.text ?? '').trim();
+        const response = await withTimeout(
+            ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt }),
+            20000 // 20-second timeout
+        );
+        const bioText = (response.text ?? '').trim();
+        return bioText || fallbackBio;
     } catch (error) {
-        console.error("Error generating bio with Gemini:", error);
-        return "A valued member of our community.";
+        console.error("Error or timeout generating bio with Gemini:", error);
+        return fallbackBio;
     }
 };
 
