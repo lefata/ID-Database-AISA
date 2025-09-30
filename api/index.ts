@@ -105,7 +105,11 @@ app.put('/settings', async (c) => {
 
     if (error) {
         console.error('Supabase settings update error:', error);
-        return c.json({ error: 'Failed to update setting' }, 500);
+        return c.json({ 
+            error: 'Failed to update setting.', 
+            details: error.message, 
+            code: error.code 
+        }, 500);
     }
     return c.json({ success: true });
 });
