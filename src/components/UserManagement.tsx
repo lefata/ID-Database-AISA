@@ -119,7 +119,8 @@ export const UserManagement: React.FC = () => {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                {user.id !== currentUser?.id && (
+                                                {/* Prevent admins from modifying their own account */}
+                                                {user.id !== currentUser?.id ? (
                                                     <div className="flex items-center justify-end space-x-2">
                                                         <button
                                                             onClick={() => handleRoleChange(user.id, user.role === 'admin' ? 'user' : 'admin')}
@@ -138,7 +139,7 @@ export const UserManagement: React.FC = () => {
                                                             <TrashIcon className="w-5 h-5" />
                                                         </button>
                                                     </div>
-                                                )}
+                                                ) : null}
                                             </td>
                                         </tr>
                                     ))}
