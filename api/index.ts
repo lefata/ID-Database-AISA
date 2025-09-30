@@ -339,6 +339,27 @@ adminApp.put('/users/:id/role', async (c) => {
     }
 });
 
+// Delete a user
+adminApp.delete('/users/:id', async (c) => {
+    const userId = c.req.param('id');
+    const currentUser = c.get('user');
+
+    if (userId === currentUser.id) {
+        return c.json({ error: "Admins cannot delete their own account." }, 400);
+    }
+    
+    try {
+        const { supabaseAdmin } = await import('./supabaseAdminClient');
+        const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+        if (error) {
+            throw error;
+        }
+        return c.json({ success: true });
+    } catch (e: any) {
+        return c.json({ error: 'Failed to delete user', details: e.message }, 500);
+    }
+});
+
 
 app.route('/admin', adminApp);
 

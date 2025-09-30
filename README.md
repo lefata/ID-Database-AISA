@@ -6,7 +6,7 @@ A modern web application to manage and browse ID profiles for staff, students, a
 
 -   **User Authentication**: Secure login system powered by Supabase Auth, with admin approval for new sign-ups.
 -   **Automated Admin Setup**: The very first user to sign up is automatically granted admin privileges.
--   **Admin Dashboard**: A protected area for administrators to approve new users, manage their roles (admin/user), and configure application settings.
+-   **Admin Dashboard**: A protected area for administrators to approve new users, manage their roles (admin/user), delete users, and configure application settings.
 -   **Configurable Google Sheet Link**: Admins can set a URL for Google Sheets, turning profile IDs into dynamic links.
 -   **Categorized Profiles**: Create and manage profiles for Staff, Students, and Parents.
 -   **Dynamic Bio Generation**: Uses the Gemini API to automatically generate a professional bio for each new profile.
@@ -118,6 +118,7 @@ Follow these steps to get the project running on your local machine.
 
     ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
     CREATE POLICY "Allow authenticated read access on settings" ON public.settings FOR SELECT TO authenticated USING (TRUE);
+    CREATE POLICY "Allow admin insert access on settings" ON public.settings FOR INSERT WITH CHECK (is_admin());
     CREATE POLICY "Allow admin update access on settings" ON public.settings FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
 
     -- 5. Create a trigger to make the first user an admin

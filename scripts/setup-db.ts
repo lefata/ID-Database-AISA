@@ -41,6 +41,7 @@ CREATE POLICY "Allow admin update access" ON public.people FOR UPDATE USING (is_
 
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow authenticated read access on settings" ON public.settings FOR SELECT TO authenticated USING (TRUE);
+CREATE POLICY "Allow admin insert access on settings" ON public.settings FOR INSERT WITH CHECK (is_admin());
 CREATE POLICY "Allow admin update access on settings" ON public.settings FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
 
 -- 5. Create a trigger to make the first user an admin
