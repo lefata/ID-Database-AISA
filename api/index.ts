@@ -114,7 +114,7 @@ app.use('/*', async (c, next) => {
 
   const supabase = createClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!, // FIX: Use ANON_KEY for user-level requests to respect RLS
+    process.env.SUPABASE_ANON_KEY!, // Use ANON_KEY for user-level requests to respect RLS
     {
       global: { headers: { Authorization: authHeader } },
       auth: { autoRefreshToken: false, persistSession: false },
