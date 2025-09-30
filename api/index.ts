@@ -1,10 +1,8 @@
 import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
-import { bearerAuth } from 'hono/bearer-auth';
 import { GoogleGenAI } from '@google/genai';
 import { PersonCategory } from '../src/types';
 import { supabase } from './supabaseClient';
-import { supabaseAdmin } from './supabaseAdminClient';
 import type { User } from '@supabase/supabase-js';
 
 export const config = {
@@ -231,36 +229,45 @@ adminApp.use('/*', async (c, next) => {
 
 // Get users pending confirmation
 adminApp.get('/pending-users', async (c) => {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
-        perPage: 1000,
-    });
+    try {
+        const { supabaseAdmin } = await import('./supabaseAdminClient');
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+            perPage: 1000,
+        });
 
-    if (error) {
-        return c.json({ error: 'Failed to list users', details: error.message }, 500);
+        if (error) {
+            return c.json({ error: 'Failed to list users', details: error.message }, 500);
+        }
+
+        const pendingUsers = data.users
+            .filter((user: User) => !user.email_confirmed_at)
+            .map(user => ({
+                id: user.id,
+                email: user.email,
+                created_at: user.created_at,
+            }));
+            
+        return c.json(pendingUsers);
+    } catch (e: any) {
+        return c.json({ error: 'Admin client failed to load. Check server configuration.', details: e.message }, 500);
     }
-
-    const pendingUsers = data.users
-        // FIX: Explicitly type `user` to fix a TypeScript inference issue where it was being inferred as `never`.
-        .filter((user: User) => !user.email_confirmed_at)
-        .map(user => ({
-            id: user.id,
-            email: user.email,
-            created_at: user.created_at,
-        }));
-        
-    return c.json(pendingUsers);
 });
 
 // Confirm a user
 adminApp.post('/users/:id/confirm', async (c) => {
     const userId = c.req.param('id');
-    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-        email_confirm: true,
-    });
-    if (error) {
-        return c.json({ error: 'Failed to confirm user', details: error.message }, 500);
+    try {
+        const { supabaseAdmin } = await import('./supabaseAdminClient');
+        const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+            email_confirm: true,
+        });
+        if (error) {
+            return c.json({ error: 'Failed to confirm user', details: error.message }, 500);
+        }
+        return c.json({ success: true, user: data.user });
+    } catch (e: any) {
+        return c.json({ error: 'Admin client failed to load. Check server configuration.', details: e.message }, 500);
     }
-    return c.json({ success: true, user: data.user });
 });
 
 app.route('/admin', adminApp);
