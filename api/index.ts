@@ -3,10 +3,79 @@ import { handle } from 'hono/vercel';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import type { User, SupabaseClient } from '@supabase/supabase-js';
-import { getSheetIdForStudent } from './googleSheetsClient';
+import { google } from 'googleapis';
 
-// --- TYPE DEFINITIONS (from api/types.ts) ---
-// Moved here to resolve Vercel bundling issue
+// --- START: Merged from googleSheetsClient.ts and types.ts ---
+// Cache the Google Sheets client so we don't re-authenticate on every request
+let sheets: any;
+
+async function getSheetsClient() {
+  if (sheets) return sheets;
+
+  const credentials = {
+    client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    // The private key can come with escaped newlines, which need to be un-escaped.
+    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  };
+
+  if (!credentials.client_email || !credentials.private_key) {
+    throw new Error('Google service account credentials are not set in environment variables.');
+  }
+
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  });
+
+  const authClient = await auth.getClient() as any;
+  sheets = google.sheets({ version: 'v4', auth: authClient });
+  return sheets;
+}
+
+/**
+ * Searches for a student in the Google Sheet and returns their ID from Column M.
+ */
+async function getSheetIdForStudent(firstName: string, lastName: string): Promise<string | null> {
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    const sheetName = process.env.GOOGLE_SHEET_NAME || 'Sheet1';
+    
+    if (!sheetId) {
+        console.warn('GOOGLE_SHEET_ID is not set. Skipping student ID lookup.');
+        return null;
+    }
+
+    const client = await getSheetsClient();
+    const searchName = `${firstName.trim()} ${lastName.trim()}`.toLowerCase();
+    
+    // Assumes First Name is in column A, Last Name is in column B, and ID is in column M.
+    const range = `${sheetName}!A:M`;
+
+    try {
+        const response = await client.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: range,
+        });
+
+        const rows = response.data.values;
+        if (rows && rows.length) {
+            for (const row of rows) {
+                const rowFirstName = row[0] || '';
+                const rowLastName = row[1] || '';
+                const rowFullName = `${rowFirstName.trim()} ${rowLastName.trim()}`.toLowerCase();
+
+                if (rowFullName === searchName) {
+                    const studentId = row[12]; // Column M is at index 12
+                    return studentId || null;
+                }
+            }
+        }
+        return null;
+    } catch (err) {
+        console.error('Error fetching data from Google Sheets API:', err);
+        throw new Error('Failed to communicate with Google Sheets.');
+    }
+}
+
 export enum PersonCategory {
   STAFF = 'Staff',
   STUDENT = 'Student',
@@ -24,6 +93,8 @@ type NewPersonData = {
   guardianIds?: number[];
   guardianTempIds?: string[];
 };
+// --- END: Merged from googleSheetsClient.ts and types.ts ---
+
 
 type AppContext = {
   Variables: {
@@ -35,16 +106,12 @@ type AppContext = {
 const app = new Hono<AppContext>().basePath('/api');
 
 // --- AUTH MIDDLEWARE ---
-// All routes below this line will require a valid Supabase JWT.
 app.use('/*', async (c, next) => {
   const authHeader = c.req.header('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
-  // Create a new Supabase client for this request.
-  // Using the SERVICE_KEY on the server gives it privileges to validate any user JWT.
-  // By passing the user's Auth header, subsequent requests will impersonate the user and respect RLS.
   const supabase = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!,
@@ -59,7 +126,7 @@ app.use('/*', async (c, next) => {
     return c.json({ error: 'Invalid token' }, 401);
   }
   c.set('user', data.user);
-  c.set('supabase', supabase); // Pass the authenticated client to the routes
+  c.set('supabase', supabase);
   await next();
 });
 
@@ -84,7 +151,6 @@ app.get('/settings', async (c) => {
         console.error('Supabase settings fetch error:', error);
         return c.json({ error: 'Failed to fetch settings' }, 500);
     }
-    // Convert array to key-value object
     const settings = data.reduce((acc, { key, value }) => {
         acc[key] = value;
         return acc;
@@ -95,7 +161,6 @@ app.get('/settings', async (c) => {
 app.put('/settings', async (c) => {
     const user = c.get('user');
     const supabase = c.get('supabase');
-    // Double-check for admin role on the server
     if (user.user_metadata?.role !== 'admin') {
         return c.json({ error: 'Forbidden: Admins only' }, 403);
     }
@@ -109,11 +174,7 @@ app.put('/settings', async (c) => {
 
     if (error) {
         console.error('Supabase settings update error:', error);
-        return c.json({ 
-            error: 'Failed to update setting.', 
-            details: error.message, 
-            code: error.code 
-        }, 500);
+        return c.json({ error: 'Failed to update setting.', details: error.message, code: error.code }, 500);
     }
     return c.json({ success: true });
 });
@@ -219,7 +280,6 @@ app.put('/people/:id', async (c) => {
     const id = c.req.param('id');
     const updateData = await c.req.json();
     
-    // Sanitize the payload to only include fields that can be updated
     const { firstName, lastName, role, class: personClass, image, guardianIds } = updateData;
     
     const payload: { [key: string]: any } = {};
@@ -228,7 +288,6 @@ app.put('/people/:id', async (c) => {
     if (role) payload.role = role;
     if (personClass) payload.class = personClass;
     if (image) payload.image = image;
-    // Only include guardianIds if it's an array (even if empty)
     if (Array.isArray(guardianIds)) {
         payload.guardianIds = guardianIds;
     }
@@ -254,7 +313,6 @@ app.put('/people/:id', async (c) => {
 // --- ADMIN-ONLY ROUTES ---
 const adminApp = new Hono<AppContext>();
 
-// Middleware to ensure only admins can access these routes
 adminApp.use('/*', async (c, next) => {
     const user = c.get('user');
     if (user.user_metadata?.role !== 'admin') {
@@ -263,13 +321,10 @@ adminApp.use('/*', async (c, next) => {
     await next();
 });
 
-// Get users pending confirmation
 adminApp.get('/pending-users', async (c) => {
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
-        const { data, error } = await supabaseAdmin.auth.admin.listUsers({
-            perPage: 1000,
-        });
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
 
         if (error) {
             return c.json({ error: 'Failed to list users', details: error.message }, 500);
@@ -289,7 +344,6 @@ adminApp.get('/pending-users', async (c) => {
     }
 });
 
-// Confirm a user
 adminApp.post('/users/:id/confirm', async (c) => {
     const userId = c.req.param('id');
     try {
@@ -306,7 +360,6 @@ adminApp.post('/users/:id/confirm', async (c) => {
     }
 });
 
-// Get all users for management
 adminApp.get('/users', async (c) => {
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
@@ -328,7 +381,6 @@ adminApp.get('/users', async (c) => {
     }
 });
 
-// Update a user's role
 adminApp.put('/users/:id/role', async (c) => {
     const userId = c.req.param('id');
     const { role } = await c.req.json();
@@ -356,7 +408,6 @@ adminApp.put('/users/:id/role', async (c) => {
     }
 });
 
-// Delete a user
 adminApp.delete('/users/:id', async (c) => {
     const userId = c.req.param('id');
     const currentUser = c.get('user');
