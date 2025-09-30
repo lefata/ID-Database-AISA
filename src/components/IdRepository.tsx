@@ -1,19 +1,22 @@
 import React, { useState } from 'react';
-import { Person } from '../types';
+import { Person, Settings } from '../types';
 import { IdCard } from './IdCard';
 import { SearchIcon } from './icons/SearchIcon';
 import { UserIcon } from './icons/UserIcon';
 
 interface IdRepositoryProps {
     people: Person[];
+    settings: Settings;
 }
 
-export const IdRepository: React.FC<IdRepositoryProps> = ({ people }) => {
+export const IdRepository: React.FC<IdRepositoryProps> = ({ people, settings }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
     const filteredPeople = people.filter(person =>
         `${person.firstName} ${person.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    
+    const googleSheetUrl = settings.googleSheetUrl || '';
 
     return (
         <div className="p-4 sm:p-6 lg:p-8">
@@ -38,7 +41,7 @@ export const IdRepository: React.FC<IdRepositoryProps> = ({ people }) => {
                 {filteredPeople.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         {filteredPeople.map(person => (
-                            <IdCard key={person.id} person={person} allPeople={people} />
+                            <IdCard key={person.id} person={person} allPeople={people} googleSheetUrl={googleSheetUrl}/>
                         ))}
                     </div>
                 ) : (

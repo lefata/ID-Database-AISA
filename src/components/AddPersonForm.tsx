@@ -3,13 +3,14 @@ import { Person, PersonCategory } from '../types';
 import { UserIcon } from './icons/UserIcon';
 import { CameraIcon } from './icons/CameraIcon';
 import { SpinnerIcon } from './icons/SpinnerIcon';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabaseClient';
 
 interface AddPersonFormProps {
     onSuccess: () => void;
     people: Person[];
 }
 
-// Data shape for a new person before it's saved (no ID, bio, etc.)
 type NewPersonData = Omit<Person, 'id' | 'bio' | 'googleSheetId'> & { tempId: string, guardianTempIds?: string[] };
 type NewGuardianData = Omit<NewPersonData, 'category' | 'role' | 'class' | 'guardianIds'>;
 
@@ -34,6 +35,7 @@ const LinkIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) =
 
 
 export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess, people }) => {
+    const { session } = useAuth();
     const [category, setCategory] = useState<PersonCategory>(PersonCategory.STAFF);
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -106,6 +108,11 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess, people 
         e.preventDefault();
         setError(null);
 
+        if (!session) {
+            setError("You must be logged in to add profiles.");
+            return;
+        }
+
         if (!firstName || !lastName || !roleOrClass || !image) {
             setError("All fields for the primary person, including photo, are required.");
             return;
@@ -148,7 +155,10 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess, people 
 
             const response = await fetch('/api/people', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                },
                 body: JSON.stringify(payload),
             });
 

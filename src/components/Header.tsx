@@ -1,6 +1,8 @@
 import React from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { CogIcon } from './icons/CogIcon';
 
-type View = 'repository' | 'add';
+type View = 'repository' | 'add' | 'admin';
 
 interface HeaderProps {
     currentView: View;
@@ -8,6 +10,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
+    const { user, isAdmin, logout } = useAuth();
     const activeClass = "bg-sky-600 text-white";
     const inactiveClass = "bg-white text-slate-600 hover:bg-slate-100";
 
@@ -22,20 +25,35 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => 
                     </div>
                     <h1 className="text-2xl font-bold text-slate-800">Synergy ID Repository</h1>
                 </div>
-                <nav className="flex space-x-1 bg-slate-200 p-1 rounded-lg">
-                    <button
-                        onClick={() => onViewChange('repository')}
-                        className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${currentView === 'repository' ? activeClass : inactiveClass}`}
-                    >
-                        Repository
-                    </button>
-                    <button
-                        onClick={() => onViewChange('add')}
-                        className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${currentView === 'add' ? activeClass : inactiveClass}`}
-                    >
-                        Add New
-                    </button>
-                </nav>
+                <div className="flex items-center space-x-4">
+                    <nav className="flex space-x-1 bg-slate-200 p-1 rounded-lg">
+                        <button
+                            onClick={() => onViewChange('repository')}
+                            className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${currentView === 'repository' ? activeClass : inactiveClass}`}
+                        >
+                            Repository
+                        </button>
+                        <button
+                            onClick={() => onViewChange('add')}
+                            className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 ${currentView === 'add' ? activeClass : inactiveClass}`}
+                        >
+                            Add New
+                        </button>
+                        {isAdmin && (
+                            <button
+                                onClick={() => onViewChange('admin')}
+                                className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 flex items-center space-x-2 ${currentView === 'admin' ? activeClass : inactiveClass}`}
+                            >
+                                <CogIcon className="w-4 h-4" />
+                                <span>Admin</span>
+                            </button>
+                        )}
+                    </nav>
+                    <div className="flex items-center space-x-3 pl-3 border-l border-slate-300">
+                        <span className="text-sm text-slate-600">{user?.email}</span>
+                        <button onClick={logout} className="text-sm font-medium text-sky-600 hover:text-sky-800">Logout</button>
+                    </div>
+                </div>
             </div>
         </header>
     );

@@ -5,6 +5,7 @@ import { UserIcon } from './icons/UserIcon';
 interface IdCardProps {
     person: Person;
     allPeople: Person[];
+    googleSheetUrl: string;
 }
 
 const categoryStyles = {
@@ -25,13 +26,33 @@ const categoryStyles = {
     },
 };
 
-export const IdCard: React.FC<IdCardProps> = ({ person, allPeople }) => {
+export const IdCard: React.FC<IdCardProps> = ({ person, allPeople, googleSheetUrl }) => {
     const styles = categoryStyles[person.category];
 
     const getGuardianName = (id: number) => {
         const guardian = allPeople.find(p => p.id === id);
         return guardian ? `${guardian.firstName} ${guardian.lastName}` : 'Unknown';
     };
+    
+    const IdTag = () => {
+        const content = `ID: ${person.googleSheetId}`;
+        const className = `px-3 py-1 text-xs font-medium rounded-full ${styles.tag}`;
+        
+        if (googleSheetUrl && !googleSheetUrl.includes('your-sheet-id-here')) {
+            return (
+                <a 
+                  href={googleSheetUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className={`${className} hover:ring-2 hover:ring-offset-1 hover:ring-sky-500 transition-all`}
+                  title="View in Google Sheet"
+                >
+                    {content}
+                </a>
+            );
+        }
+        return <span className={className}>{content}</span>;
+    }
 
     return (
         <div className="bg-white rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 ease-in-out">
@@ -48,9 +69,7 @@ export const IdCard: React.FC<IdCardProps> = ({ person, allPeople }) => {
                 <div className="mt-4 pt-4 border-t border-slate-200">
                     <p className="text-sm text-slate-600 italic">"{person.bio}"</p>
                     <div className="mt-3 flex justify-between items-center">
-                         <span className={`px-3 py-1 text-xs font-medium rounded-full ${styles.tag}`}>
-                           ID: {person.googleSheetId}
-                         </span>
+                         <IdTag />
                     </div>
                 </div>
                 {person.category === PersonCategory.STUDENT && person.guardianIds && person.guardianIds.length > 0 && (
