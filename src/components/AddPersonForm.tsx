@@ -177,7 +177,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess, people 
         }
     };
     
-    const parents = useMemo(() => people.filter(p => p.category === PersonCategory.PARENT), [people]);
+    const potentialGuardians = useMemo(() => people.filter(p => p.category === PersonCategory.PARENT || p.category === PersonCategory.STAFF), [people]);
     const potentialSiblings = useMemo(() => {
         if (!siblingSearch) return [];
         return people.filter(p => p.category === PersonCategory.STUDENT && p.lastName.toLowerCase().includes(siblingSearch.toLowerCase()));
@@ -263,17 +263,17 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess, people 
                                     
                                     {/* Existing Guardians */}
                                     <div>
-                                        <h4 className="text-sm font-medium text-slate-700 mb-2">Select Existing Guardians</h4>
-                                        {parents.length > 0 ? (
+                                        <h4 className="text-sm font-medium text-slate-700 mb-2">Select Existing Guardians (Parents or Staff)</h4>
+                                        {potentialGuardians.length > 0 ? (
                                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-h-48 overflow-y-auto p-2 bg-slate-50 rounded-lg border">
-                                                {parents.map(parent => (
-                                                    <label key={parent.id} className="flex items-center space-x-3 p-3 bg-white rounded-lg border border-slate-200 cursor-pointer hover:bg-sky-50 transition has-[:checked]:bg-sky-50 has-[:checked]:border-sky-400">
-                                                        <input type="checkbox" checked={selectedGuardians.includes(parent.id)} onChange={() => handleGuardianSelection(parent.id)} className="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500" />
-                                                        <span className="text-sm font-medium text-slate-700">{parent.firstName} {parent.lastName}</span>
+                                                {potentialGuardians.map(person => (
+                                                    <label key={person.id} className="flex items-center space-x-3 p-3 bg-white rounded-lg border border-slate-200 cursor-pointer hover:bg-sky-50 transition has-[:checked]:bg-sky-50 has-[:checked]:border-sky-400">
+                                                        <input type="checkbox" checked={selectedGuardians.includes(person.id)} onChange={() => handleGuardianSelection(person.id)} className="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500" />
+                                                        <span className="text-sm font-medium text-slate-700">{person.firstName} {person.lastName}</span>
                                                     </label>
                                                 ))}
                                             </div>
-                                        ) : ( <p className="text-sm text-slate-500 italic">No existing guardians found.</p> )}
+                                        ) : ( <p className="text-sm text-slate-500 italic">No existing guardians or staff found.</p> )}
                                     </div>
                                     
                                     {/* Add New Guardians */}

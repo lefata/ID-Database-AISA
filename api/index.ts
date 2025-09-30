@@ -4,6 +4,7 @@ import { bearerAuth } from 'hono/bearer-auth';
 import { GoogleGenAI } from '@google/genai';
 import { PersonCategory } from '../src/types';
 import { supabase } from './supabaseClient';
+import { supabaseAdmin } from './supabaseAdminClient';
 import type { User } from '@supabase/supabase-js';
 
 export const config = {
@@ -174,5 +175,52 @@ app.post('/people', async (c) => {
     return c.json({ error: 'Failed to create profiles', details: e.message }, 500);
   }
 });
+
+
+// --- ADMIN-ONLY ROUTES ---
+const adminApp = new Hono<AppContext>();
+
+// Middleware to ensure only admins can access these routes
+// FIX: Added async/await to conform to Hono's middleware type signature.
+adminApp.use('/*', async (c, next) => {
+    const user = c.get('user');
+    if (user.user_metadata?.role !== 'admin') {
+        return c.json({ error: 'Forbidden: Admins only' }, 403);
+    }
+    await next();
+});
+
+// Get users pending confirmation
+adminApp.get('/pending-users', async (c) => {
+    // FIX: Avoided destructuring to help TypeScript correctly infer types from the Supabase response union.
+    const listUsersResponse = await supabaseAdmin.auth.admin.listUsers({
+        perPage: 1000,
+    });
+    if (listUsersResponse.error) {
+        return c.json({ error: 'Failed to list users', details: listUsersResponse.error.message }, 500);
+    }
+    const pendingUsers = listUsersResponse.data.users
+        .filter(user => !user.email_confirmed_at)
+        .map(user => ({
+            id: user.id,
+            email: user.email,
+            created_at: user.created_at,
+        }));
+    return c.json(pendingUsers);
+});
+
+// Confirm a user
+adminApp.post('/users/:id/confirm', async (c) => {
+    const userId = c.req.param('id');
+    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        email_confirm: true,
+    });
+    if (error) {
+        return c.json({ error: 'Failed to confirm user', details: error.message }, 500);
+    }
+    return c.json({ success: true, user: data.user });
+});
+
+app.route('/admin', adminApp);
 
 export default handle(app);

@@ -1,12 +1,115 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Settings } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AdminDashboardProps {
     settings: Settings;
     onSettingsUpdate: () => void;
 }
+
+interface PendingUser {
+    id: string;
+    email: string;
+    created_at: string;
+}
+
+const PendingUsers: React.FC = () => {
+    const { session } = useAuth();
+    const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+    const fetchPendingUsers = useCallback(async () => {
+        if (!session) return;
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await fetch('/api/admin/pending-users', {
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Failed to fetch pending users.');
+            }
+            const data = await response.json();
+            setPendingUsers(data);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [session]);
+
+    useEffect(() => {
+        fetchPendingUsers();
+    }, [fetchPendingUsers]);
+
+    const handleConfirmUser = async (userId: string) => {
+        if (!session) return;
+        setConfirmingId(userId);
+        try {
+            const response = await fetch(`/api/admin/users/${userId}/confirm`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+            if (!response.ok) {
+                 const errData = await response.json();
+                throw new Error(errData.error || 'Failed to confirm user.');
+            }
+            // Refresh list on success
+            await fetchPendingUsers();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setConfirmingId(null);
+        }
+    }
+
+    return (
+        <div className="p-6 mt-8 bg-white rounded-lg shadow-md">
+            <h3 className="text-lg font-medium leading-6 text-slate-900">Pending User Approvals</h3>
+            <div className="mt-4">
+                {isLoading && <p>Loading users...</p>}
+                {error && <p className="text-sm text-red-600">{error}</p>}
+                {!isLoading && !error && pendingUsers.length === 0 && <p className="text-sm text-slate-500">No users are currently awaiting approval.</p>}
+                {pendingUsers.length > 0 && (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-200">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Email</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Signed Up</th>
+                                    <th scope="col" className="relative px-6 py-3"><span className="sr-only">Approve</span></th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-slate-200">
+                                {pendingUsers.map((user) => (
+                                    <tr key={user.id}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{user.email}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{new Date(user.created_at).toLocaleString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button 
+                                                onClick={() => handleConfirmUser(user.id)}
+                                                disabled={confirmingId === user.id}
+                                                className="inline-flex items-center justify-center w-24 px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 border border-transparent rounded-md shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:bg-emerald-300"
+                                            >
+                                                {confirmingId === user.id ? <SpinnerIcon className="w-4 h-4" /> : 'Approve'}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSettingsUpdate }) => {
     const [sheetUrl, setSheetUrl] = useState(settings.googleSheetUrl || '');
@@ -42,7 +145,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
             <div className="max-w-4xl mx-auto">
                 <div className="mb-8">
                     <h2 className="text-3xl font-bold text-slate-800">Admin Dashboard</h2>
-                    <p className="mt-1 text-slate-500">Manage application settings.</p>
+                    <p className="mt-1 text-slate-500">Manage application settings and user approvals.</p>
                 </div>
 
                 <div className="p-6 bg-white rounded-lg shadow-md">
@@ -86,6 +189,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
                         </div>
                     </form>
                 </div>
+                
+                <PendingUsers />
             </div>
         </div>
     );

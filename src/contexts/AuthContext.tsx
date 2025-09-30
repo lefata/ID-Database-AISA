@@ -19,22 +19,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      setIsAdmin(currentUser?.user_metadata?.role === 'admin');
-      setLoading(false);
-    });
-
-    // Initial check
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const handleAuthStateChange = (_event: string, session: Session | null) => {
+      if (session && !session.user.email_confirmed_at) {
+        // User is signed in but not confirmed. Force sign out.
+        supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setIsAdmin(false);
+      } else {
         setSession(session);
         const currentUser = session?.user ?? null;
         setUser(currentUser);
         setIsAdmin(currentUser?.user_metadata?.role === 'admin');
-        setLoading(false);
+      }
+      setLoading(false);
+    };
+
+    // Initial check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        handleAuthStateChange('INITIAL_SESSION', session);
     });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthStateChange);
 
     return () => subscription.unsubscribe();
   }, []);

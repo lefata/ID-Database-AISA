@@ -4,12 +4,12 @@ A modern web application to manage and browse ID profiles for staff, students, a
 
 ## Features
 
--   **User Authentication**: Secure login system powered by Supabase Auth.
--   **Admin Dashboard**: A protected area for administrators to manage application settings.
+-   **User Authentication**: Secure login system powered by Supabase Auth, with admin approval for new sign-ups.
+-   **Admin Dashboard**: A protected area for administrators to approve new users and manage application settings.
 -   **Configurable Google Sheet Link**: Admins can set a URL for Google Sheets, turning profile IDs into dynamic links.
 -   **Categorized Profiles**: Create and manage profiles for Staff, Students, and Parents.
 -   **Dynamic Bio Generation**: Uses the Gemini API to automatically generate a professional bio for each new profile.
--   **Profile Associations**: Link students to their guardians.
+-   **Profile Associations**: Link students to their guardians (who can be parents or staff).
 -   **Persistent & Secure Storage**: Data is stored in a Supabase database, protected by Row Level Security.
 
 ## Tech Stack
@@ -65,10 +65,12 @@ Follow these steps to get the project running on your local machine.
 
 ### 4. Supabase Configuration
 
-#### Step 4.1: Enable Authentication
+#### Step 4.1: Enable Authentication & Disable Email Confirmation
 
 -   In your Supabase Dashboard, go to **Authentication** -> **Providers**.
--   Enable the **Email** provider. Leave the other settings as default for now.
+-   Enable the **Email** provider.
+-   Go to **Authentication** -> **Settings**.
+-   In the **Email** section, turn **OFF** the "Confirm email" toggle. This is crucial for the admin approval flow to work.
 
 #### Step 4.2: Create Database Tables & Security Functions
 
@@ -152,16 +154,15 @@ Follow these steps to get the project running on your local machine.
 
 ### 5. Create an Admin User
 
--   Run the app (`npm run dev`) and sign up for a new account.
--   Go to your Supabase Dashboard -> **Authentication** -> **Users**.
--   Find the user you just created, click the three dots, and select **Edit user**.
--   In the **User Metadata** section, add the following to give the user admin privileges:
+-   Run the app (`npm run dev`) and sign up for a new account with an `@aisabuja` email.
+-   Since auto-confirmation is off, you need to confirm this first user manually in the Supabase Dashboard. Go to **Authentication** -> **Users**, find the new user, and click the "..." menu, then "Confirm user".
+-   Next, click the user to go to their details page. In the **User Metadata** section, add the following to give the user admin privileges:
     ```json
     {
       "role": "admin"
     }
     ```
--   Click **Save**. Now, when you log in with this user, you will see the "Admin" dashboard.
+-   Click **Save**. Now, when you log in with this user, you will see the "Admin" dashboard and can approve other new users.
 
 ### 6. Running the Development Server
 
@@ -184,5 +185,5 @@ The application should now be running at `http://localhost:5173`.
         -   `SUPABASE_URL`
         -   `SUPABASE_ANON_KEY`
         -   `API_KEY_ALIAS_FOR_GEMINI`
-    -   **Important**: Do not add `SUPABASE_SERVICE_KEY` to Vercel's environment variables unless you have specific backend needs for it beyond the setup script. It's a security risk if exposed.
+        -   `SUPABASE_SERVICE_KEY` (Required for admin functions like user approval)
     -   Click "Deploy".

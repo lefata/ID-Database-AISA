@@ -18,10 +18,12 @@ export const LoginPage: React.FC = () => {
     
     try {
       if (isSignUp) {
-        // Sign up
+        if (!email.endsWith('@aisabuja')) {
+            throw new Error('Sign-up is restricted to @aisabuja emails only.');
+        }
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        setMessage('Sign up successful! Please check your email for a confirmation link.');
+        setMessage('Account created. Please wait for an administrator to approve your account.');
       } else {
         // Sign in
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -29,7 +31,11 @@ export const LoginPage: React.FC = () => {
         // The onAuthStateChange listener in AuthContext will handle successful login.
       }
     } catch (error: any) {
-      setError(error.error_description || error.message);
+        if (error.message.includes('Email not confirmed')) {
+            setError('Your account is pending administrator approval.');
+        } else {
+            setError(error.error_description || error.message);
+        }
     } finally {
       setLoading(false);
     }
