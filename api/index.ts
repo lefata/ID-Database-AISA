@@ -6,10 +6,6 @@ import { createClient } from '@supabase/supabase-js';
 import type { User, SupabaseClient } from '@supabase/supabase-js';
 import { getSheetIdForStudent } from './googleSheetsClient';
 
-export const config = {
-  runtime: 'edge',
-};
-
 type NewPersonData = {
   tempId: string;
   category: PersonCategory;
