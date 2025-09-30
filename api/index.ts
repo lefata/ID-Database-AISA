@@ -289,6 +289,57 @@ adminApp.post('/users/:id/confirm', async (c) => {
     }
 });
 
+// Get all users for management
+adminApp.get('/users', async (c) => {
+    try {
+        const { supabaseAdmin } = await import('./supabaseAdminClient');
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+
+        if (error) {
+            return c.json({ error: 'Failed to list users', details: error.message }, 500);
+        }
+        
+        const managedUsers = data.users.map(user => ({
+            id: user.id,
+            email: user.email,
+            role: user.user_metadata?.role || 'user',
+        }));
+
+        return c.json(managedUsers);
+    } catch (e: any) {
+        return c.json({ error: 'Admin client failed to load', details: e.message }, 500);
+    }
+});
+
+// Update a user's role
+adminApp.put('/users/:id/role', async (c) => {
+    const userId = c.req.param('id');
+    const { role } = await c.req.json();
+
+    if (role !== 'admin' && role !== 'user') {
+        return c.json({ error: 'Invalid role specified' }, 400);
+    }
+
+    try {
+        const { supabaseAdmin } = await import('./supabaseAdminClient');
+        const { data: userToUpdate, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(userId);
+        if (fetchError) throw fetchError;
+        
+        const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+            user_metadata: { ...userToUpdate.user.user_metadata, role },
+        });
+
+        if (error) {
+            return c.json({ error: 'Failed to update user role', details: error.message }, 500);
+        }
+
+        return c.json({ success: true, user: data.user });
+    } catch (e: any) {
+        return c.json({ error: 'Admin client failed to load or update failed', details: e.message }, 500);
+    }
+});
+
+
 app.route('/admin', adminApp);
 
 export default handle(app);

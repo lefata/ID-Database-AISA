@@ -6,7 +6,7 @@ A modern web application to manage and browse ID profiles for staff, students, a
 
 -   **User Authentication**: Secure login system powered by Supabase Auth, with admin approval for new sign-ups.
 -   **Automated Admin Setup**: The very first user to sign up is automatically granted admin privileges.
--   **Admin Dashboard**: A protected area for administrators to approve new users and manage application settings.
+-   **Admin Dashboard**: A protected area for administrators to approve new users, manage their roles (admin/user), and configure application settings.
 -   **Configurable Google Sheet Link**: Admins can set a URL for Google Sheets, turning profile IDs into dynamic links.
 -   **Categorized Profiles**: Create and manage profiles for Staff, Students, and Parents.
 -   **Dynamic Bio Generation**: Uses the Gemini API to automatically generate a professional bio for each new profile.
@@ -66,12 +66,12 @@ Follow these steps to get the project running on your local machine.
 
 ### 4. Supabase Configuration
 
-#### Step 4.1: Enable Authentication & Disable Email Confirmation
+#### Step 4.1: Enable Authentication & Email Confirmation
 
 -   In your Supabase Dashboard, go to **Authentication** -> **Providers**.
 -   Enable the **Email** provider.
 -   Go to **Authentication** -> **Settings**.
--   In the **Email** section, turn **OFF** the "Confirm email" toggle. This is crucial for the admin approval flow to work correctly (the first admin's email will be confirmed automatically by our script).
+-   In the **Email** section, turn **ON** the "Confirm email" toggle. This is **CRUCIAL** for the admin approval flow to work. When this is on, new users' emails are not confirmed by default, placing them in the pending queue.
 
 #### Step 4.2: Create Database Schema and Security Rules
 

@@ -3,6 +3,7 @@ import { Settings } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 import { useAuth } from '../contexts/AuthContext';
+import { UserManagement } from '../components/UserManagement';
 
 interface AdminDashboardProps {
     settings: Settings;
@@ -206,6 +207,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
                 </div>
                 
                 <PendingUsers />
+
+                <UserManagement />
             </div>
         </div>
     );
