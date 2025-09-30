@@ -21,7 +21,9 @@ async function getSheetsClient() {
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   });
 
-  const authClient = await auth.getClient();
+  // The 'googleapis' library has complex types; casting to 'any' is a pragmatic
+  // way to resolve the TS2769 error while maintaining runtime correctness.
+  const authClient = await auth.getClient() as any;
   sheets = google.sheets({ version: 'v4', auth: authClient });
   return sheets;
 }

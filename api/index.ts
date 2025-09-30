@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
 import { GoogleGenAI } from '@google/genai';
-import { PersonCategory } from '../src/types';
+import { PersonCategory } from './types';
 import { createClient } from '@supabase/supabase-js';
 import type { User, SupabaseClient } from '@supabase/supabase-js';
 import { getSheetIdForStudent } from './googleSheetsClient';
