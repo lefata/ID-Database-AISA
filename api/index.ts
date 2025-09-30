@@ -38,11 +38,12 @@ app.use('/*', async (c, next) => {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
-  // Create a new Supabase client for this request, authenticated with the user's token.
-  // This ensures that all database operations respect Row Level Security policies.
+  // Create a new Supabase client for this request.
+  // Using the SERVICE_KEY on the server gives it privileges to validate any user JWT.
+  // By passing the user's Auth header, subsequent requests will impersonate the user and respect RLS.
   const supabase = createClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!,
+    process.env.SUPABASE_SERVICE_KEY!,
     {
       global: { headers: { Authorization: authHeader } },
       auth: { autoRefreshToken: false, persistSession: false },
