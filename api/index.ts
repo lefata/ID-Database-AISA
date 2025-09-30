@@ -1,10 +1,17 @@
 import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
 import { GoogleGenAI } from '@google/genai';
-import { PersonCategory } from './types';
 import { createClient } from '@supabase/supabase-js';
 import type { User, SupabaseClient } from '@supabase/supabase-js';
 import { getSheetIdForStudent } from './googleSheetsClient';
+
+// --- TYPE DEFINITIONS (from api/types.ts) ---
+// Moved here to resolve Vercel bundling issue
+export enum PersonCategory {
+  STAFF = 'Staff',
+  STUDENT = 'Student',
+  PARENT = 'Parent/Guardian',
+}
 
 type NewPersonData = {
   tempId: string;
