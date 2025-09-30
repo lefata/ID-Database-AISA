@@ -37,6 +37,7 @@ $$;
 ALTER TABLE public.people ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow authenticated read access" ON public.people FOR SELECT TO authenticated USING (TRUE);
 CREATE POLICY "Allow authenticated insert access" ON public.people FOR INSERT TO authenticated WITH CHECK (TRUE);
+CREATE POLICY "Allow admin update access" ON public.people FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
 
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow authenticated read access on settings" ON public.settings FOR SELECT TO authenticated USING (TRUE);

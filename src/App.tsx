@@ -24,20 +24,15 @@ const AppContent: React.FC = () => {
         setError(null);
         try {
             const [peopleResponse, settingsResponse] = await Promise.all([
-                supabase.from('people').select('*').order('lastName').order('firstName'),
-                supabase.from('settings').select('key, value')
+                fetch('/api/people', { headers: { 'Authorization': `Bearer ${session.access_token}` } }),
+                fetch('/api/settings', { headers: { 'Authorization': `Bearer ${session.access_token}` } })
             ]);
 
-            if (peopleResponse.error) throw new Error(`Failed to fetch people: ${peopleResponse.error.message}`);
-            if (settingsResponse.error) throw new Error(`Failed to fetch settings: ${settingsResponse.error.message}`);
+            if (!peopleResponse.ok) throw new Error(`Failed to fetch people: ${await peopleResponse.text()}`);
+            if (!settingsResponse.ok) throw new Error(`Failed to fetch settings: ${await settingsResponse.text()}`);
             
-            setPeople(peopleResponse.data || []);
-            
-            const settingsData = settingsResponse.data.reduce((acc, { key, value }) => {
-              acc[key] = value;
-              return acc;
-            }, {} as Settings);
-            setSettings(settingsData);
+            setPeople(await peopleResponse.json());
+            setSettings(await settingsResponse.json());
 
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -45,6 +40,7 @@ const AppContent: React.FC = () => {
             setIsLoading(false);
         }
     }, [session]);
+
 
     useEffect(() => {
         fetchData();

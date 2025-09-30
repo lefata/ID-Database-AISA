@@ -129,6 +129,10 @@ Follow these steps to get the project running on your local machine.
     -- Allow logged-in users to create new profiles
     CREATE POLICY "Allow authenticated insert access" ON public.people
     FOR INSERT TO authenticated WITH CHECK (TRUE);
+
+    -- Allow ONLY admins to update profiles
+    CREATE POLICY "Allow admin update access" ON public.people
+    FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
     ```
 
 -   **Query 2: Secure the `settings` table**

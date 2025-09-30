@@ -112,6 +112,7 @@ const PendingUsers: React.FC = () => {
 
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSettingsUpdate }) => {
+    const { session } = useAuth();
     const [sheetUrl, setSheetUrl] = useState(settings.googleSheetUrl || '');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -123,17 +124,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
         setError(null);
         setSuccessMessage(null);
 
-        try {
-            const { error: rpcError } = await supabase.from('settings').upsert({ key: 'googleSheetUrl', value: sheetUrl });
+        if (!session) {
+            setError("Authentication session has expired. Please log in again.");
+            setIsLoading(false);
+            return;
+        }
 
-            if (rpcError) {
-                throw new Error(rpcError.message);
+        try {
+            const response = await fetch('/api/settings', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ key: 'googleSheetUrl', value: sheetUrl }),
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Failed to save settings.');
             }
 
             setSuccessMessage('Settings saved successfully!');
             onSettingsUpdate(); // Refresh settings in parent
         } catch (err: any) {
-            setError(err.message || 'An unknown error occurred.');
+            setError(err.message);
         } finally {
             setIsLoading(false);
             setTimeout(() => setSuccessMessage(null), 3000);
