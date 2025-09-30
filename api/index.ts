@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { PersonCategory } from '../src/types';
 import { createClient } from '@supabase/supabase-js';
 import type { User, SupabaseClient } from '@supabase/supabase-js';
+import { getSheetIdForStudent } from './googleSheetsClient';
 
 export const config = {
   runtime: 'edge',
@@ -172,6 +173,15 @@ app.post('/people', async (c) => {
             studentPayloads.map(async (student) => {
                 const newGuardianIds = student.guardianTempIds?.map(tempId => tempIdToNewIdMap[tempId]).filter(Boolean) || [];
                 const allGuardianIds = [...new Set([...(student.guardianIds || []), ...newGuardianIds])];
+                
+                let googleSheetId: string;
+                try {
+                    googleSheetId = await getSheetIdForStudent(student.firstName, student.lastName) ?? `GS-${Math.floor(10000 + Math.random() * 90000)}`;
+                } catch (e) {
+                    console.warn(`Could not retrieve student ID from Google Sheet for ${student.firstName} ${student.lastName}. Falling back to random ID.`, e);
+                    googleSheetId = `GS-${Math.floor(10000 + Math.random() * 90000)}`;
+                }
+
                 return {
                     category: student.category,
                     firstName: student.firstName,
@@ -180,7 +190,7 @@ app.post('/people', async (c) => {
                     class: student.class,
                     guardianIds: allGuardianIds,
                     bio: await generateBio(ai, student.firstName, student.lastName, PersonCategory.STUDENT, student.class!),
-                    googleSheetId: `GS-${Math.floor(10000 + Math.random() * 90000)}`,
+                    googleSheetId: googleSheetId,
                 }
             })
         );

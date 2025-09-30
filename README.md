@@ -7,7 +7,7 @@ A modern web application to manage and browse ID profiles for staff, students, a
 -   **User Authentication**: Secure login system powered by Supabase Auth, with admin approval for new sign-ups.
 -   **Automated Admin Setup**: The very first user to sign up is automatically granted admin privileges.
 -   **Admin Dashboard**: A protected area for administrators to approve new users, manage their roles (admin/user), delete users, and configure application settings.
--   **Configurable Google Sheet Link**: Admins can set a URL for Google Sheets, turning profile IDs into dynamic links.
+-   **Google Sheet Integration**: Automatically retrieves a student's unique ID from a designated Google Sheet upon profile creation, ensuring data consistency.
 -   **Categorized Profiles**: Create and manage profiles for Staff, Students, and Parents.
 -   **Dynamic Bio Generation**: Uses the Gemini API to automatically generate a professional bio for each new profile.
 -   **Profile Associations**: Link students to their guardians (who can be parents or staff).
@@ -19,6 +19,7 @@ A modern web application to manage and browse ID profiles for staff, students, a
 -   **Backend**: Hono on Vercel Serverless Functions
 -   **Database & Auth**: Supabase
 -   **AI**: Google Gemini API
+-   **Data Source**: Google Sheets API
 
 ---
 
@@ -31,6 +32,7 @@ Follow these steps to get the project running on your local machine.
 -   Node.js (v18 or later)
 -   `npm` or `yarn`
 -   A Supabase account with a project created.
+-   A Google Cloud account and a Google Sheet.
 -   A Google Gemini API Key.
 
 ### 2. Installation
@@ -49,7 +51,7 @@ Follow these steps to get the project running on your local machine.
     cp .env.example .env
     ```
 
-2.  **Fill in the variables:** Open `.env` and add your credentials. Frontend variables **must** be prefixed with `VITE_`.
+2.  **Fill in the variables:** Open `.env` and add your credentials. See the sections below for details on where to find these values.
     ```ini
     # Supabase connection details (for frontend)
     VITE_SUPABASE_URL="your_supabase_project_url"
@@ -62,6 +64,14 @@ Follow these steps to get the project running on your local machine.
 
     # Google Gemini API Key
     API_KEY_ALIAS_FOR_GEMINI="your_gemini_api_key"
+    
+    # Google Sheets Integration (for retrieving student IDs)
+    GOOGLE_SHEET_ID="your_google_sheet_id"
+    GOOGLE_SHEET_NAME="Sheet1" # The name of the sheet/tab to search in
+    GOOGLE_SERVICE_ACCOUNT_EMAIL="your-service-account-email@your-project.iam.gserviceaccount.com"
+    # Paste the entire private key from your service account JSON file.
+    # It must be enclosed in quotes and include the BEGIN and END lines.
+    GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
     ```
 
 ### 4. Supabase Configuration
@@ -71,14 +81,14 @@ Follow these steps to get the project running on your local machine.
 -   In your Supabase Dashboard, go to **Authentication** -> **Providers**.
 -   Enable the **Email** provider.
 -   Go to **Authentication** -> **Settings**.
--   In the **Email** section, turn **ON** the "Confirm email" toggle. This is **CRUCIAL** for the admin approval flow to work. When this is on, new users' emails are not confirmed by default, placing them in the pending queue.
+-   In the **Email** section, turn **ON** the "Confirm email" toggle. This is **CRUCIAL** for the admin approval flow to work.
 
 #### Step 4.2: Create Database Schema and Security Rules
 
 > **IMPORTANT:** You must run the following SQL script in your Supabase SQL Editor. This step is required to create the necessary tables and security policies. If you encounter permission errors in the app, it's likely because this script was not run on your database.
 
 -   Go to the **SQL Editor** in your Supabase dashboard.
--   Click **New query** and paste the **entire** SQL script below into the editor, then click **Run**. This single script creates all tables, functions, security policies, and the trigger for automatic admin setup.
+-   Click **New query** and paste the **entire** SQL script below into the editor, then click **Run**.
 
     ```sql
     -- 1. Create the 'people' table
@@ -168,15 +178,51 @@ Follow these steps to get the project running on your local machine.
     ```bash
     npm run db:setup
     ```
+    
+### 5. Google Sheets Integration
 
-### 5. Create Your Admin User
+To allow the application to read Student IDs from your spreadsheet, you need to create a **Service Account** and share the sheet with it.
+
+1.  **Create a Service Account:**
+    -   Go to the [Google Cloud Console](https://console.cloud.google.com/).
+    -   Select your project or create a new one.
+    -   Navigate to **IAM & Admin** -> **Service Accounts**.
+    -   Click **+ CREATE SERVICE ACCOUNT**.
+    -   Give it a name (e.g., `synergy-id-reader`) and click **CREATE AND CONTINUE**.
+    -   Skip the "Grant this service account access" step and click **CONTINUE**.
+    -   Skip the "Grant users access" step and click **DONE**.
+
+2.  **Enable the Google Sheets API:**
+    -   Navigate to **APIs & Services** -> **Library**.
+    -   Search for "Google Sheets API" and click **Enable**.
+
+3.  **Generate a Key:**
+    -   Go back to **IAM & Admin** -> **Service Accounts**.
+    -   Click on the email address of the service account you just created.
+    -   Go to the **KEYS** tab.
+    -   Click **ADD KEY** -> **Create new key**.
+    -   Select **JSON** as the key type and click **CREATE**. A JSON file will be downloaded.
+
+4.  **Share your Google Sheet:**
+    -   Open the JSON file you downloaded. Find the `client_email` value (e.g., `synergy-id-reader@your-project.iam.gserviceaccount.com`).
+    -   Open your Google Sheet.
+    -   Click the **Share** button.
+    -   Paste the `client_email` into the sharing dialog and give it at least **Viewer** access. Click **Share**.
+
+5.  **Set Environment Variables:**
+    -   Open your `.env` file.
+    -   **`GOOGLE_SHEET_ID`**: Get this from your sheet's URL: `https://docs.google.com/spreadsheets/d/THIS_IS_THE_ID/edit`.
+    -   **`GOOGLE_SERVICE_ACCOUNT_EMAIL`**: The `client_email` from the JSON file.
+    -   **`GOOGLE_PRIVATE_KEY`**: The `private_key` value from the JSON file. Copy the entire string, including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines. **It must be enclosed in double quotes.**
+
+### 6. Create Your Admin User
 
 -   If you have already signed up with any users, **delete them** from the Supabase **Authentication** -> **Users** panel.
 -   Run the app:
     ```bash
     npm run dev
     ```
--   Sign up for a new account. The first account created will automatically become an administrator. You will be logged in immediately and will see the "Admin" button in the header.
+-   Sign up for a new account. The first account created will automatically become an administrator.
 
 ---
 
@@ -186,11 +232,5 @@ Follow these steps to get the project running on your local machine.
     -   Import your Git repository into Vercel.
 
 2.  **Configure Environment Variables:**
-    -   In the Vercel project settings, add the following environment variables from your `.env` file:
-        -   `VITE_SUPABASE_URL`
-        -   `VITE_SUPABASE_ANON_KEY`
-        -   `SUPABASE_URL`
-        -   `SUPABASE_ANON_KEY`
-        -   `API_KEY_ALIAS_FOR_GEMINI`
-        -   `SUPABASE_SERVICE_KEY` (Required for admin functions like user approval)
+    -   In the Vercel project settings, add all the environment variables from your `.env` file, including the Google Sheets credentials.
     -   Click "Deploy".
