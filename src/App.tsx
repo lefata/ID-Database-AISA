@@ -4,21 +4,13 @@ import { IdRepository } from './components/IdRepository';
 import { AddPersonForm } from './components/AddPersonForm';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { LoginPage } from './pages/LoginPage';
-import { Person, Settings, Associate } from './types';
+import { Person, Settings } from './types';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { supabase } from './lib/supabaseClient';
 import { SpinnerIcon } from './components/icons/SpinnerIcon';
 
 type View = 'repository' | 'add' | 'admin';
 const PAGE_LIMIT = 21;
 
-/**
- * A helper function to wrap a fetch request with a timeout.
- * @param resource The URL or request info.
- * @param options The fetch options.
- * @param timeout The timeout in milliseconds.
- * @returns A promise that resolves with the fetch response or rejects on timeout.
- */
 async function fetchWithTimeout(resource: RequestInfo, options: RequestInit = {}, timeout = 15000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
@@ -43,7 +35,6 @@ const AppContent: React.FC = () => {
     const { session, isAdmin, loading: authLoading } = useAuth();
     const [view, setView] = useState<View>('repository');
     const [people, setPeople] = useState<Person[]>([]);
-    const [associates, setAssociates] = useState<Associate[]>([]);
     const [settings, setSettings] = useState<Settings>({});
     const [totalPeople, setTotalPeople] = useState(0);
     const [currentPage, setCurrentPage] = useState(1);
@@ -59,14 +50,11 @@ const AppContent: React.FC = () => {
             const fetchOptions = { headers: { 'Authorization': `Bearer ${session.access_token}` } };
             const peopleUrl = `/api/people?page=${page}&limit=${PAGE_LIMIT}&search=${encodeURIComponent(search)}`;
             
-            // Fetch people, settings, and the list of associates for guardian lookups
-            const [peopleResponse, settingsResponse, associatesResponse] = await Promise.all([
+            const [peopleResponse, settingsResponse] = await Promise.all([
                 fetchWithTimeout(peopleUrl, fetchOptions),
                 fetchWithTimeout('/api/settings', fetchOptions),
-                fetchWithTimeout('/api/people/associates', fetchOptions)
             ]);
 
-            // Process People Response
             if (!peopleResponse.ok) {
                  const errorText = await peopleResponse.text();
                  console.error('Error fetching people:', { status: peopleResponse.status, body: errorText });
@@ -77,13 +65,8 @@ const AppContent: React.FC = () => {
             setTotalPeople(total);
             setCurrentPage(page);
 
-            // Process Settings Response
             if (!settingsResponse.ok) throw new Error('Failed to fetch settings');
             setSettings(await settingsResponse.json());
-            
-            // Process Associates Response
-            if (!associatesResponse.ok) throw new Error('Failed to fetch associates for guardian lookups.');
-            setAssociates(await associatesResponse.json());
 
         } catch (err) {
             console.error("An error occurred during data fetching:", err);
@@ -94,21 +77,18 @@ const AppContent: React.FC = () => {
     }, [session]);
 
     useEffect(() => {
-        // Initial data load
         if(session) {
             fetchAllData(1, '');
         }
-    }, [session]); // Depend on session to trigger initial load
+    }, [session]);
 
     const handleSuccess = () => {
-        // Refetch the current page after a successful add/edit/delete
         fetchAllData(currentPage, searchTerm);
         setView('repository');
     };
 
     const handleSearchChange = (term: string) => {
         setSearchTerm(term);
-        // Reset to page 1 for new search
         fetchAllData(1, term);
     };
 
@@ -129,7 +109,7 @@ const AppContent: React.FC = () => {
     }
 
     const renderContent = () => {
-        if (isLoading && people.length === 0) { // Only show full-page spinner on initial load
+        if (isLoading && people.length === 0) {
             return (
                 <div className="flex items-center justify-center h-96">
                     <SpinnerIcon className="w-10 h-10 text-sky-600" />
@@ -143,7 +123,6 @@ const AppContent: React.FC = () => {
                 return (
                     <IdRepository
                         people={people}
-                        associates={associates}
                         settings={settings}
                         onSuccess={handleSuccess}
                         totalPeople={totalPeople}
@@ -154,7 +133,7 @@ const AppContent: React.FC = () => {
                     />
                 );
             case 'add':
-                return <AddPersonForm onSuccess={handleSuccess} people={people} />;
+                return <AddPersonForm onSuccess={handleSuccess} />;
             case 'admin':
                 return isAdmin ? <AdminDashboard settings={settings} onSettingsUpdate={handleSuccess} /> : <div className="p-10 text-center">Access Denied.</div>;
             default:

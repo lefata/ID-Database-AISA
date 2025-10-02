@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Person, Settings, Associate } from '../types';
+import { Person, Settings } from '../types';
 import { IdCard } from './IdCard';
 import { SearchIcon } from './icons/SearchIcon';
 import { UserIcon } from './icons/UserIcon';
@@ -10,7 +10,6 @@ const PAGE_LIMIT = 21;
 
 interface IdRepositoryProps {
     people: Person[];
-    associates: Associate[];
     settings: Settings;
     onSuccess: () => void;
     totalPeople: number;
@@ -22,7 +21,6 @@ interface IdRepositoryProps {
 
 export const IdRepository: React.FC<IdRepositoryProps> = ({ 
     people,
-    associates,
     settings,
     onSuccess,
     totalPeople,
@@ -54,7 +52,6 @@ export const IdRepository: React.FC<IdRepositoryProps> = ({
     };
     
     useEffect(() => {
-        // Clear timeout on unmount
         return () => {
             if (searchTimeout.current) {
                 clearTimeout(searchTimeout.current);
@@ -98,7 +95,6 @@ export const IdRepository: React.FC<IdRepositoryProps> = ({
                                     <IdCard
                                       key={person.id}
                                       person={person}
-                                      associates={associates}
                                       googleSheetUrl={googleSheetUrl}
                                       onEdit={setEditingPerson}
                                     />
@@ -145,7 +141,6 @@ export const IdRepository: React.FC<IdRepositoryProps> = ({
             {editingPerson && (
                 <EditPersonModal
                     person={editingPerson}
-                    allPeople={people} // Note: This is now just one page of people
                     onClose={() => setEditingPerson(null)}
                     onSuccess={handleEditSuccess}
                 />

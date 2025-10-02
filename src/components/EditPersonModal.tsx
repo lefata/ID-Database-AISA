@@ -1,32 +1,48 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Person, PersonCategory } from '../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Person, PersonCategory, Associate } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { CameraIcon } from './icons/CameraIcon';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { ImageCropModal } from './ImageCropModal';
+import { UserIcon } from './icons/UserIcon';
 
 interface EditPersonModalProps {
   person: Person;
-  allPeople: Person[];
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, allPeople, onClose, onSuccess }) => {
+const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
+    // FIX: Use ReturnType<typeof setTimeout> to avoid type mismatch between browser (number) and Node (Timeout object).
+    let timeout: ReturnType<typeof setTimeout>;
+    return (...args: Parameters<F>): Promise<ReturnType<F>> =>
+        new Promise(resolve => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => resolve(func(...args)), waitFor);
+        });
+};
+
+const XIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => ( <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg> );
+
+export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClose, onSuccess }) => {
   const { session } = useAuth();
   const [formData, setFormData] = useState({ ...person });
   const [imagePreview, setImagePreview] = useState<string | null>(person.image);
   const [newImageFile, setNewImageFile] = useState<string | null>(null);
-  const [selectedGuardians, setSelectedGuardians] = useState<number[]>(person.guardianIds || []);
+  const [selectedGuardians, setSelectedGuardians] = useState<Associate[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [croppingImageSrc, setCroppingImageSrc] = useState<string | null>(null);
+  
+  // State for async searching
+  const [guardianSearch, setGuardianSearch] = useState('');
+  const [guardianResults, setGuardianResults] = useState<Associate[]>([]);
+  const [isGuardianSearching, setIsGuardianSearching] = useState(false);
 
   useEffect(() => {
-    // Reset form data if the person prop changes
     setFormData({ ...person });
     setImagePreview(person.image);
-    setSelectedGuardians(person.guardianIds || []);
+    setSelectedGuardians(person.guardianDetails || []);
     setNewImageFile(null);
     setError(null);
   }, [person]);
@@ -40,12 +56,10 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, allPeo
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setCroppingImageSrc(reader.result as string);
-      };
+      reader.onloadend = () => setCroppingImageSrc(reader.result as string);
       reader.readAsDataURL(file);
     }
-    e.target.value = ''; // Allow re-selecting the same file
+    e.target.value = '';
   };
 
   const handleCropComplete = (croppedImageUrl: string) => {
@@ -54,16 +68,39 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, allPeo
     setCroppingImageSrc(null);
   };
   
-  const handleCropCancel = () => {
-      setCroppingImageSrc(null);
+  const debouncedGuardianSearch = useCallback(debounce(async (term: string) => {
+      if (term.length < 2 || !session) {
+          setGuardianResults([]);
+          setIsGuardianSearching(false);
+          return;
+      }
+      try {
+          const response = await fetch(`/api/associates?search=${encodeURIComponent(term)}`, {
+              headers: { 'Authorization': `Bearer ${session.access_token}` }
+          });
+          if (!response.ok) throw new Error('Search failed');
+          const data = await response.json();
+          setGuardianResults(data);
+      } catch (err) {
+          console.error(err);
+      } finally {
+          setIsGuardianSearching(false);
+      }
+  }, 500), [session]);
+
+  const handleGuardianSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const term = e.target.value;
+      setGuardianSearch(term);
+      setIsGuardianSearching(true);
+      debouncedGuardianSearch(term);
   };
 
-  const handleGuardianSelection = (guardianId: number) => {
-    setSelectedGuardians(prev =>
-      prev.includes(guardianId)
-        ? prev.filter(id => id !== guardianId)
-        : [...prev, guardianId]
-    );
+  const handleSelectGuardian = (guardian: Associate) => {
+      if (!selectedGuardians.some(g => g.id === guardian.id)) {
+          setSelectedGuardians(prev => [...prev, guardian]);
+      }
+      setGuardianSearch('');
+      setGuardianResults([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -71,39 +108,27 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, allPeo
     setError(null);
     setIsSaving(true);
     
-    if (!session) {
-        setError("Authentication session expired. Please log in again.");
-        setIsSaving(false);
-        return;
-    }
+    if (!session) { setError("Authentication session expired. Please log in again."); setIsSaving(false); return; }
 
     const updatePayload: Partial<Person> = {
-      ...formData,
-      image: newImageFile || formData.image, // Send new base64 image if uploaded
-      ...(formData.category === PersonCategory.STUDENT && { guardianIds: selectedGuardians }),
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      role: formData.role,
+      class: formData.class,
+      image: newImageFile || formData.image,
+      ...(formData.category === PersonCategory.STUDENT && { guardianIds: selectedGuardians.map(g => g.id) }),
     };
-    
-    // Remove fields that shouldn't be updated
-    delete (updatePayload as any).id;
-    delete (updatePayload as any).bio; // Assuming bio is not editable here
-    delete (updatePayload as any).googleSheetId;
-    delete (updatePayload as any).createdAt;
     
     try {
         const response = await fetch(`/api/people/${person.id}`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`,
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
             body: JSON.stringify(updatePayload),
         });
-
         if (!response.ok) {
             const errData = await response.json();
             throw new Error(errData.error || 'Failed to update profile.');
         }
-
         onSuccess();
     } catch (err: any) {
         setError(err.message);
@@ -111,11 +136,6 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, allPeo
         setIsSaving(false);
     }
   };
-
-  const potentialGuardians = useMemo(() => 
-    allPeople.filter(p => (p.category === PersonCategory.PARENT || p.category === PersonCategory.STAFF) && p.id !== person.id), 
-    [allPeople, person.id]
-  );
 
   return (
     <>
@@ -128,74 +148,36 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, allPeo
           <form onSubmit={handleSubmit}>
             <div className="p-6 space-y-6">
               <div className="flex items-center space-x-6">
-                <div className="relative">
-                  <img src={imagePreview || ''} alt="Profile" className="w-24 h-24 rounded-full object-cover" />
-                  <label className="absolute -bottom-1 -right-1 p-2 bg-sky-600 rounded-full text-white cursor-pointer hover:bg-sky-700 transition">
-                    <CameraIcon className="w-4 h-4" />
-                    <input type="file" accept="image/*" onChange={handleFileChange} className="sr-only" />
-                  </label>
-                </div>
+                <div className="relative"><img src={imagePreview || ''} alt="Profile" className="w-24 h-24 rounded-full object-cover" /><label className="absolute -bottom-1 -right-1 p-2 bg-sky-600 rounded-full text-white cursor-pointer hover:bg-sky-700 transition"><CameraIcon className="w-4 h-4" /><input type="file" accept="image/*" onChange={handleFileChange} className="sr-only" /></label></div>
                 <div className="flex-1 grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="firstName" className="block text-sm font-medium text-slate-700">First Name</label>
-                    <input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" />
-                  </div>
-                  <div>
-                    <label htmlFor="lastName" className="block text-sm font-medium text-slate-700">Last Name</label>
-                    <input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" />
-                  </div>
+                  <div><label htmlFor="firstName" className="block text-sm font-medium text-slate-700">First Name</label><input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" /></div>
+                  <div><label htmlFor="lastName" className="block text-sm font-medium text-slate-700">Last Name</label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" /></div>
                 </div>
               </div>
               <div>
-                <label htmlFor="roleOrClass" className="block text-sm font-medium text-slate-700">
-                  {person.category === PersonCategory.STUDENT ? 'Class/Grade' : 'Job/Position'}
-                </label>
-                <input 
-                  type="text" 
-                  name={person.category === PersonCategory.STUDENT ? 'class' : 'role'} 
-                  id="roleOrClass"
-                  value={person.category === PersonCategory.STUDENT ? formData.class : formData.role} 
-                  onChange={handleInputChange} 
-                  className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" 
-                />
+                <label htmlFor="roleOrClass" className="block text-sm font-medium text-slate-700">{person.category === PersonCategory.STUDENT ? 'Class/Grade' : 'Job/Position'}</label>
+                <input type="text" name={person.category === PersonCategory.STUDENT ? 'class' : 'role'} id="roleOrClass" value={person.category === PersonCategory.STUDENT ? formData.class : formData.role} onChange={handleInputChange} className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" />
               </div>
 
               {person.category === PersonCategory.STUDENT && (
                 <div>
-                  <h4 className="text-sm font-medium text-slate-700 mb-2">Associated Guardians</h4>
-                  {potentialGuardians.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-40 overflow-y-auto p-2 bg-slate-50 rounded-lg border">
-                          {potentialGuardians.map(p => (
-                              <label key={p.id} className="flex items-center space-x-3 p-2 bg-white rounded-md border border-slate-200 cursor-pointer hover:bg-sky-50 transition has-[:checked]:bg-sky-100 has-[:checked]:border-sky-400">
-                                  <input type="checkbox" checked={selectedGuardians.includes(p.id)} onChange={() => handleGuardianSelection(p.id)} className="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500" />
-                                  <span className="text-sm font-medium text-slate-700">{p.firstName} {p.lastName}</span>
-                              </label>
-                          ))}
-                      </div>
-                  ) : ( <p className="text-sm text-slate-500 italic">No other parents or staff available to select as guardians.</p> )}
+                  <label htmlFor="guardianSearch" className="block text-sm font-medium text-slate-700">Associated Guardians</label>
+                  <div className="relative"><input id="guardianSearch" type="text" value={guardianSearch} onChange={handleGuardianSearchChange} placeholder="Search to add a guardian..." className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" />
+                  {isGuardianSearching && <SpinnerIcon className="absolute right-3 top-3.5 w-5 h-5 text-slate-400" />}</div>
+                  {guardianResults.length > 0 && <ul className="mt-1 border rounded-md shadow-sm bg-white max-h-40 overflow-y-auto">{guardianResults.map(p => <li key={p.id} onClick={() => handleSelectGuardian(p)} className="p-2 text-sm cursor-pointer hover:bg-sky-50">{p.firstName} {p.lastName}</li>)}</ul>}
+                  {selectedGuardians.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{selectedGuardians.map(g => <span key={g.id} className="flex items-center space-x-2 bg-sky-100 text-sky-800 text-sm font-medium px-3 py-1 rounded-full"><UserIcon className="w-4 h-4" /><span>{g.firstName} {g.lastName}</span><button type="button" onClick={() => setSelectedGuardians(prev => prev.filter(sg => sg.id !== g.id))} className="text-sky-600 hover:text-sky-800"><XIcon /></button></span>)}</div>}
                 </div>
               )}
-
               {error && <p className="text-sm text-center text-red-600">{error}</p>}
             </div>
             <div className="p-6 bg-slate-50 flex justify-end space-x-3 rounded-b-xl">
-              <button type="button" onClick={onClose} disabled={isSaving} className="px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50 transition">
-                Cancel
-              </button>
-              <button type="submit" disabled={isSaving} className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:bg-sky-300 flex items-center justify-center w-28">
-                {isSaving ? <SpinnerIcon /> : 'Save Changes'}
-              </button>
+              <button type="button" onClick={onClose} disabled={isSaving} className="px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50 transition">Cancel</button>
+              <button type="submit" disabled={isSaving} className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:bg-sky-300 flex items-center justify-center w-28">{isSaving ? <SpinnerIcon /> : 'Save Changes'}</button>
             </div>
           </form>
         </div>
       </div>
-      {croppingImageSrc && (
-          <ImageCropModal
-              imageSrc={croppingImageSrc}
-              onClose={handleCropCancel}
-              onCropComplete={handleCropComplete}
-          />
-      )}
+      {croppingImageSrc && <ImageCropModal imageSrc={croppingImageSrc} onClose={() => setCroppingImageSrc(null)} onCropComplete={handleCropComplete} />}
     </>
   );
 };

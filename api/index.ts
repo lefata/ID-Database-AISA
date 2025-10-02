@@ -1,19 +1,10 @@
 import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
-// FIX: Import GenerateContentResponse to correctly type the response from the Gemini API.
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import type { User, SupabaseClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
 
-// --- START: Merged from googleSheetsClient.ts and types.ts ---
-
-/**
- * A helper function to wrap a promise with a timeout.
- * @param promise The promise to wrap.
- * @param ms The timeout duration in milliseconds.
- * @returns A new promise that rejects if the original promise doesn't resolve in time.
- */
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -33,8 +24,6 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   });
 };
 
-
-// Cache the Google Sheets client so we don't re-authenticate on every request
 let sheets: any;
 
 async function getSheetsClient() {
@@ -42,7 +31,6 @@ async function getSheetsClient() {
 
   const credentials = {
     client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    // The private key can come with escaped newlines, which need to be un-escaped.
     private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
   };
 
@@ -60,9 +48,6 @@ async function getSheetsClient() {
   return sheets;
 }
 
-/**
- * Searches for a student in the Google Sheet and returns their ID from Column M.
- */
 async function getSheetIdForStudent(firstName: string, lastName: string): Promise<string | null> {
     const sheetId = process.env.GOOGLE_SHEET_ID;
     const sheetName = process.env.GOOGLE_SHEET_NAME || 'Sheet1';
@@ -75,7 +60,6 @@ async function getSheetIdForStudent(firstName: string, lastName: string): Promis
     const client = await getSheetsClient();
     const searchName = `${firstName.trim()} ${lastName.trim()}`.toLowerCase();
     
-    // Assumes First Name is in column A, Last Name is in column B, and ID is in column M.
     const range = `${sheetName}!A:M`;
 
     try {
@@ -85,7 +69,7 @@ async function getSheetIdForStudent(firstName: string, lastName: string): Promis
                 range: range,
             },
             {
-                timeout: 20000, // 20-second timeout
+                timeout: 20000,
             }
         );
 
@@ -97,7 +81,7 @@ async function getSheetIdForStudent(firstName: string, lastName: string): Promis
                 const rowFullName = `${rowFirstName.trim()} ${rowLastName.trim()}`.toLowerCase();
 
                 if (rowFullName === searchName) {
-                    const studentId = row[12]; // Column M is at index 12
+                    const studentId = row[12];
                     return studentId || null;
                 }
             }
@@ -126,8 +110,6 @@ type NewPersonData = {
   guardianIds?: number[];
   guardianTempIds?: string[];
 };
-// --- END: Merged from googleSheetsClient.ts and types.ts ---
-
 
 type AppContext = {
   Variables: {
@@ -138,7 +120,6 @@ type AppContext = {
 
 const app = new Hono<AppContext>().basePath('/api');
 
-// --- AUTH MIDDLEWARE ---
 app.use('/*', async (c, next) => {
   const authHeader = c.req.header('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -147,7 +128,7 @@ app.use('/*', async (c, next) => {
 
   const supabase = createClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!, // Use ANON_KEY for user-level requests to respect RLS
+    process.env.SUPABASE_ANON_KEY!,
     {
       global: { headers: { Authorization: authHeader } },
       auth: { autoRefreshToken: false, persistSession: false },
@@ -163,16 +144,8 @@ app.use('/*', async (c, next) => {
   await next();
 });
 
-/**
- * Uploads a base64 encoded image to Supabase Storage.
- * @param supabase The Supabase client instance.
- * @param base64Data The base64 data URL (e.g., "data:image/png;base64,...").
- * @param personName A name to use for generating a unique file path.
- * @returns The public URL of the uploaded image.
- */
 async function uploadImageToStorage(supabase: SupabaseClient, base64Data: string, personName: string): Promise<string> {
     if (!base64Data || !base64Data.startsWith('data:image')) {
-        // If it's not a new base64 upload, return the original value (it might be an existing URL).
         return base64Data;
     }
 
@@ -186,7 +159,6 @@ async function uploadImageToStorage(supabase: SupabaseClient, base64Data: string
     const mimeType = mimeTypeMatch[1];
     const fileExtension = mimeType.split('/')[1] || 'png';
 
-    // Sanitize personName for file path
     const sanitizedName = personName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
     const filePath = `avatars/${sanitizedName}-${Date.now()}.${fileExtension}`;
 
@@ -206,17 +178,14 @@ async function uploadImageToStorage(supabase: SupabaseClient, base64Data: string
     return publicUrl;
 }
 
-
-// Helper function to generate a bio
 const generateBio = async (ai: GoogleGenAI, firstName: string, lastName: string, category: PersonCategory, roleOrClass: string): Promise<string> => {
     const roleDescription = category === PersonCategory.STUDENT ? `a student in ${roleOrClass}` : `a ${roleOrClass}`;
     const prompt = `Generate a short, positive, one-sentence professional description for ${firstName} ${lastName}, who is ${roleDescription}. Keep it under 20 words. Example: 'A dedicated educator shaping future minds.' or 'An enthusiastic learner with a bright future.'`;
     const fallbackBio = "A valued member of our community.";
     try {
-        // FIX: Explicitly type the awaited response to resolve the 'Property 'text' does not exist on type 'unknown'' error.
         const response = await withTimeout<GenerateContentResponse>(
             ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt }),
-            20000 // 20-second timeout
+            20000
         );
         const bioText = (response.text ?? '').trim();
         return bioText || fallbackBio;
@@ -226,7 +195,6 @@ const generateBio = async (ai: GoogleGenAI, firstName: string, lastName: string,
     }
 };
 
-// --- SETTINGS ROUTES ---
 app.get('/settings', async (c) => {
     const supabase = c.get('supabase');
     const { data, error } = await supabase.from('settings').select('key, value');
@@ -234,13 +202,11 @@ app.get('/settings', async (c) => {
         console.error('Supabase settings fetch error:', error);
         return c.json({ error: 'Failed to fetch settings' }, 500);
     }
-    // Defensive check: ensure data is an array before reducing.
-    // A null response or non-array could crash the function, causing a timeout.
     if (!Array.isArray(data)) {
         return c.json({});
     }
     const settings = data.reduce((acc, row) => {
-        if (row && row.key) { // Ensure the row and its key are valid
+        if (row && row.key) {
             acc[row.key] = row.value;
         }
         return acc;
@@ -269,8 +235,6 @@ app.put('/settings', async (c) => {
     return c.json({ success: true });
 });
 
-
-// --- PEOPLE ROUTES ---
 app.get('/people', async (c) => {
   const supabase = c.get('supabase');
   const page = parseInt(c.req.query('page') || '1');
@@ -282,36 +246,68 @@ app.get('/people', async (c) => {
   let query = supabase.from('people').select('*', { count: 'exact' });
 
   if (search) {
-    // This search logic splits the search term by spaces and requires all words to match
-    // in either the first or last name in some combination.
-    // e.g., "leo co" will match "Leo Cole".
     const searchWords = search.trim().split(' ').filter(w => w.length > 0);
     const orConditions = searchWords.map(word => `firstName.ilike.%${word}%,lastName.ilike.%${word}%`).join(',');
     query = query.or(orConditions);
   }
 
-  const { data, error, count } = await query.order('lastName').order('firstName').range(from, to);
+  const { data: people, error, count } = await query.order('lastName').order('firstName').range(from, to);
 
   if (error) {
     console.error('Supabase fetch error:', error);
     return c.json({ error: `Failed to fetch people: ${error.message}` }, 500);
   }
   
-  if (!Array.isArray(data)) {
-      return c.json({ people: [], total: 0 });
+  if (!Array.isArray(people) || people.length === 0) {
+      return c.json({ people: [], total: count || 0 });
   }
 
-  return c.json({ people: data, total: count || 0 });
+  const studentGuardianIds = people
+      .filter(p => p.category === PersonCategory.STUDENT && p.guardianIds?.length)
+      .flatMap(p => p.guardianIds);
+
+  if (studentGuardianIds.length > 0) {
+      const uniqueGuardianIds = [...new Set(studentGuardianIds)];
+      const { data: guardians, error: guardianError } = await supabase
+          .from('people')
+          .select('id, firstName, lastName')
+          .in('id', uniqueGuardianIds);
+
+      if (guardianError) {
+          console.error('Failed to fetch guardian details:', guardianError);
+      } else if (guardians) {
+          const guardianMap = new Map(guardians.map(g => [g.id, g]));
+          people.forEach((person: any) => {
+              if (person.category === PersonCategory.STUDENT && person.guardianIds) {
+                  person.guardianDetails = person.guardianIds
+                      .map((id: number) => guardianMap.get(id))
+                      .filter(Boolean);
+              }
+          });
+      }
+  }
+
+  return c.json({ people, total: count || 0 });
 });
 
-app.get('/people/associates', async (c) => {
+app.get('/associates', async (c) => {
     const supabase = c.get('supabase');
-    const { data, error } = await supabase
+    const search = c.req.query('search') || '';
+
+    if (!search || search.length < 2) {
+        return c.json([]);
+    }
+
+    let query = supabase
         .from('people')
         .select('id, firstName, lastName')
-        .in('category', [PersonCategory.STAFF, PersonCategory.PARENT])
-        .order('lastName')
-        .order('firstName');
+        .in('category', [PersonCategory.STAFF, PersonCategory.PARENT]);
+    
+    const searchWords = search.trim().split(' ').filter(w => w.length > 0);
+    const orConditions = searchWords.map(word => `firstName.ilike.%${word}%,lastName.ilike.%${word}%`).join(',');
+    query = query.or(orConditions);
+    
+    const { data, error } = await query.limit(10);
 
     if (error) {
         console.error('Supabase fetch associates error:', error);
@@ -319,7 +315,6 @@ app.get('/people/associates', async (c) => {
     }
     return c.json(data || []);
 });
-
 
 app.post('/people', async (c) => {
   const supabase = c.get('supabase');
@@ -410,8 +405,6 @@ app.put('/people/:id', async (c) => {
     const id = c.req.param('id');
     const updateData = await c.req.json();
     
-    // If there's a new base64 image, upload it to storage and update the payload.
-    // The user-scoped client `supabase` is sufficient if RLS is set for storage.
     if (updateData.image && updateData.image.startsWith('data:image')) {
         updateData.image = await uploadImageToStorage(
             supabase, 
@@ -433,8 +426,6 @@ app.put('/people/:id', async (c) => {
     return c.json({ success: true });
 });
 
-
-// --- ADMIN-ONLY ROUTES ---
 const adminApp = new Hono<AppContext>();
 
 adminApp.use('/*', async (c, next) => {
@@ -551,7 +542,6 @@ adminApp.delete('/users/:id', async (c) => {
         return c.json({ error: 'Failed to delete user', details: e.message }, 500);
     }
 });
-
 
 app.route('/admin', adminApp);
 

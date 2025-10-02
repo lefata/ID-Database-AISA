@@ -6,7 +6,6 @@ import { EditIcon } from './icons/EditIcon';
 
 interface IdCardProps {
     person: Person;
-    associates: Associate[]; // Lightweight list of parents/staff for lookups
     googleSheetUrl: string;
     onEdit: (person: Person) => void;
 }
@@ -29,14 +28,9 @@ const categoryStyles = {
     },
 };
 
-export const IdCard: React.FC<IdCardProps> = ({ person, associates, googleSheetUrl, onEdit }) => {
+export const IdCard: React.FC<IdCardProps> = ({ person, googleSheetUrl, onEdit }) => {
     const styles = categoryStyles[person.category];
     const { isAdmin } = useAuth();
-
-    const getGuardianName = (id: number) => {
-        const guardian = associates.find(p => p.id === id);
-        return guardian ? `${guardian.firstName} ${guardian.lastName}` : 'Unknown';
-    };
     
     const IdTag = () => {
         const content = `ID: ${person.googleSheetId}`;
@@ -85,14 +79,14 @@ export const IdCard: React.FC<IdCardProps> = ({ person, associates, googleSheetU
                          <IdTag />
                     </div>
                 </div>
-                {person.category === PersonCategory.STUDENT && person.guardianIds && person.guardianIds.length > 0 && (
+                {person.category === PersonCategory.STUDENT && person.guardianDetails && person.guardianDetails.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-slate-200">
                         <h4 className="text-sm font-semibold text-slate-700 mb-2">Associated Guardians</h4>
                         <ul className="space-y-2">
-                            {person.guardianIds.map(id => (
-                                <li key={id} className="flex items-center space-x-2 text-sm text-slate-600">
+                            {person.guardianDetails.map(guardian => (
+                                <li key={guardian.id} className="flex items-center space-x-2 text-sm text-slate-600">
                                     <UserIcon className="w-4 h-4 text-slate-400" />
-                                    <span>{getGuardianName(id)}</span>
+                                    <span>{`${guardian.firstName} ${guardian.lastName}`}</span>
                                 </li>
                             ))}
                         </ul>
