@@ -11,6 +11,33 @@ import { SpinnerIcon } from './components/icons/SpinnerIcon';
 
 type View = 'repository' | 'add' | 'admin';
 
+/**
+ * A helper function to wrap a fetch request with a timeout.
+ * @param resource The URL or request info.
+ * @param options The fetch options.
+ * @param timeout The timeout in milliseconds.
+ * @returns A promise that resolves with the fetch response or rejects on timeout.
+ */
+async function fetchWithTimeout(resource: RequestInfo, options: RequestInit = {}, timeout = 15000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal  
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error: any) {
+    clearTimeout(id);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeout / 1000} seconds.`);
+    }
+    throw error;
+  }
+}
+
 const AppContent: React.FC = () => {
     const { session, isAdmin, loading } = useAuth();
     const [view, setView] = useState<View>('repository');
@@ -24,19 +51,38 @@ const AppContent: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
+            const fetchOptions = { headers: { 'Authorization': `Bearer ${session.access_token}` } };
+            
             const [peopleResponse, settingsResponse] = await Promise.all([
-                fetch('/api/people', { headers: { 'Authorization': `Bearer ${session.access_token}` } }),
-                fetch('/api/settings', { headers: { 'Authorization': `Bearer ${session.access_token}` } })
+                fetchWithTimeout('/api/people', fetchOptions),
+                fetchWithTimeout('/api/settings', fetchOptions)
             ]);
 
-            if (!peopleResponse.ok) throw new Error(`Failed to fetch people: ${await peopleResponse.text()}`);
-            if (!settingsResponse.ok) throw new Error(`Failed to fetch settings: ${await settingsResponse.text()}`);
+            if (!peopleResponse.ok) {
+                const errorText = await peopleResponse.text();
+                console.error('Error fetching people:', { 
+                    status: peopleResponse.status, 
+                    statusText: peopleResponse.statusText, 
+                    body: errorText 
+                });
+                throw new Error(`Failed to fetch people. Server responded with ${peopleResponse.status} ${peopleResponse.statusText}.`);
+            }
+            if (!settingsResponse.ok) {
+                 const errorText = await settingsResponse.text();
+                console.error('Error fetching settings:', {
+                    status: settingsResponse.status,
+                    statusText: settingsResponse.statusText,
+                    body: errorText
+                });
+                throw new Error(`Failed to fetch settings. Server responded with ${settingsResponse.status} ${settingsResponse.statusText}.`);
+            }
             
             setPeople(await peopleResponse.json());
             setSettings(await settingsResponse.json());
 
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+            console.error("An error occurred during data fetching:", err);
+            setError(err instanceof Error ? err.message : 'An unknown error occurred while loading data.');
         } finally {
             setIsLoading(false);
         }
