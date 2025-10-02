@@ -8,7 +8,7 @@ A modern web application to manage and browse ID profiles for staff, students, a
 -   **Automated Admin Setup**: The very first user to sign up is automatically granted admin privileges.
 -   **Admin Dashboard**: A protected area for administrators to approve new users, manage their roles (admin/user), delete users, and configure application settings.
 -   **Optimized Image Handling**: Profile photos are stored in Supabase Storage for fast, efficient delivery, preventing API timeouts and improving load times.
--   **Google Sheet Integration**: Automatically retrieves a student's unique ID from a designated Google Sheet upon profile creation, ensuring data consistency.
+-   **Google Sheet Integration**: Automatically retrieves a student's unique ID from a designated public Google Sheet upon profile creation, ensuring data consistency.
 -   **Categorized Profiles**: Create and manage profiles for Staff, Students, and Parents.
 -   **Dynamic Bio Generation**: Uses the Gemini API to automatically generate a professional bio for each new profile.
 -   **Profile Associations**: Link students to their guardians (who can be parents or staff).
@@ -34,7 +34,7 @@ Follow these steps to get the project running on your local machine.
 -   `npm` or `yarn`
 -   A Supabase account with a project created.
 -   A Google Cloud account and a Google Sheet.
--   A Google Gemini API Key.
+-   A Google Cloud API Key (can be the same one used for Gemini).
 
 ### 2. Installation
 
@@ -63,16 +63,12 @@ Follow these steps to get the project running on your local machine.
     SUPABASE_ANON_KEY="your_supabase_public_anon_key"
     SUPABASE_SERVICE_KEY="your_supabase_service_role_key"
 
-    # Google Gemini API Key
-    API_KEY_ALIAS_FOR_GEMINI="your_gemini_api_key"
+    # Google Cloud API Key (used for Gemini and Google Sheets)
+    API_KEY_ALIAS_FOR_GEMINI="your_google_cloud_api_key"
     
     # Google Sheets Integration (for retrieving student IDs)
     GOOGLE_SHEET_ID="your_google_sheet_id"
     GOOGLE_SHEET_NAME="Sheet1" # The name of the sheet/tab to search in
-    GOOGLE_SERVICE_ACCOUNT_EMAIL="your-service-account-email@your-project.iam.gserviceaccount.com"
-    # Paste the entire private key from your service account JSON file.
-    # It must be enclosed in quotes and include the BEGIN and END lines.
-    GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
     ```
 
 ### 4. Supabase Configuration
@@ -202,39 +198,26 @@ Follow these steps to get the project running on your local machine.
     
 ### 5. Google Sheets Integration
 
-To allow the application to read Student IDs from your spreadsheet, you need to create a **Service Account** and share the sheet with it.
+To allow the application to read Student IDs from your spreadsheet, you need to enable the Google Sheets API and make your sheet public.
 
-1.  **Create a Service Account:**
+1.  **Enable the Google Sheets API:**
     -   Go to the [Google Cloud Console](https://console.cloud.google.com/).
-    -   Select your project or create a new one.
-    -   Navigate to **IAM & Admin** -> **Service Accounts**.
-    -   Click **+ CREATE SERVICE ACCOUNT**.
-    -   Give it a name (e.g., `synergy-id-reader`) and click **CREATE AND CONTINUE**.
-    -   Skip the "Grant this service account access" step and click **CONTINUE**.
-    -   Skip the "Grant users access" step and click **DONE**.
-
-2.  **Enable the Google Sheets API:**
+    -   Select your project.
     -   Navigate to **APIs & Services** -> **Library**.
     -   Search for "Google Sheets API" and click **Enable**.
+    -   Ensure your API key (from `API_KEY_ALIAS_FOR_GEMINI`) is not restricted from accessing this API.
 
-3.  **Generate a Key:**
-    -   Go back to **IAM & Admin** -> **Service Accounts**.
-    -   Click on the email address of the service account you just created.
-    -   Go to the **KEYS** tab.
-    -   Click **ADD KEY** -> **Create new key**.
-    -   Select **JSON** as the key type and click **CREATE**. A JSON file will be downloaded.
-
-4.  **Share your Google Sheet:**
-    -   Open the JSON file you downloaded. Find the `client_email` value (e.g., `synergy-id-reader@your-project.iam.gserviceaccount.com`).
+2.  **Share your Google Sheet:**
     -   Open your Google Sheet.
-    -   Click the **Share** button.
-    -   Paste the `client_email` into the sharing dialog and give it at least **Viewer** access. Click **Share**.
+    -   Click the **Share** button in the top-right corner.
+    -   Under "General access", change the setting from "Restricted" to **"Anyone with the link"**.
+    -   Ensure the role is set to **"Viewer"**.
+    -   Click **Done**.
 
-5.  **Set Environment Variables:**
+3.  **Set Environment Variables:**
     -   Open your `.env` file.
     -   **`GOOGLE_SHEET_ID`**: Get this from your sheet's URL: `https://docs.google.com/spreadsheets/d/THIS_IS_THE_ID/edit`.
-    -   **`GOOGLE_SERVICE_ACCOUNT_EMAIL`**: The `client_email` from the JSON file.
-    -   **`GOOGLE_PRIVATE_KEY`**: The `private_key` value from the JSON file. Copy the entire string, including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines. **It must be enclosed in double quotes.**
+    -   **`API_KEY_ALIAS_FOR_GEMINI`**: Your Google Cloud API Key.
 
 ### 6. Create Your Admin User
 
@@ -253,5 +236,5 @@ To allow the application to read Student IDs from your spreadsheet, you need to 
     -   Import your Git repository into Vercel.
 
 2.  **Configure Environment Variables:**
-    -   In the Vercel project settings, add all the environment variables from your `.env` file, including the Google Sheets credentials.
+    -   In the Vercel project settings, add all the environment variables from your `.env` file.
     -   Click "Deploy".

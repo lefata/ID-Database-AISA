@@ -3,7 +3,6 @@ import { handle } from 'hono/vercel';
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import type { User, SupabaseClient } from '@supabase/supabase-js';
-import { google } from 'googleapis';
 
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   return new Promise((resolve, reject) => {
@@ -24,72 +23,57 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   });
 };
 
-let sheets: any;
-
-async function getSheetsClient() {
-  if (sheets) return sheets;
-
-  const credentials = {
-    client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  };
-
-  if (!credentials.client_email || !credentials.private_key) {
-    throw new Error('Google service account credentials are not set in environment variables.');
-  }
-
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-
-  const authClient = await withTimeout(auth.getClient(), 15000) as any;
-  sheets = google.sheets({ version: 'v4', auth: authClient });
-  return sheets;
-}
-
-async function getSheetIdForStudent(firstName: string, lastName:string): Promise<string | null> {
+async function getSheetIdForStudent(firstName: string, lastName: string): Promise<string | null> {
     const sheetId = process.env.GOOGLE_SHEET_ID;
+    const apiKey = process.env.API_KEY_ALIAS_FOR_GEMINI;
     const sheetName = process.env.GOOGLE_SHEET_NAME || 'Sheet1';
-    
-    if (!sheetId) {
-        console.warn('GOOGLE_SHEET_ID is not set. Skipping student ID lookup.');
+
+    if (!sheetId || !apiKey) {
+        let warning = 'Google Sheet lookup is disabled. Missing environment variable(s):';
+        if (!sheetId) warning += ' GOOGLE_SHEET_ID';
+        if (!apiKey) warning += ' API_KEY_ALIAS_FOR_GEMINI';
+        console.warn(warning);
         return null;
     }
 
-    const client = await getSheetsClient();
-    const searchName = `${firstName.trim()} ${lastName.trim()}`.toLowerCase();
-    
     const range = `${sheetName}!A:M`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?key=${apiKey}`;
+    const searchName = `${firstName.trim()} ${lastName.trim()}`.toLowerCase();
 
     try {
-        const promise = client.spreadsheets.values.get({
-            spreadsheetId: sheetId,
-            range: range,
-        });
-
+        const promise = fetch(url);
         const response = await withTimeout(promise, 20000);
 
-        // FIX: Cast response to any to access the 'data' property from the Google Sheets API response.
-        const rows = (response as any).data.values;
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Google Sheets API error:', errorData.error);
+            throw new Error(`Failed to fetch from Google Sheets: ${errorData.error.message || response.statusText}`);
+        }
+
+        const data = await response.json();
+        const rows = data.values;
+
         if (rows && rows.length) {
             for (const row of rows) {
+                if (!row) continue; // Skip empty rows
                 const rowFirstName = row[0] || '';
                 const rowLastName = row[1] || '';
                 const rowFullName = `${rowFirstName.trim()} ${rowLastName.trim()}`.toLowerCase();
 
                 if (rowFullName === searchName) {
-                    const studentId = row[12];
+                    const studentId = row[12]; // Column M is at index 12
                     return studentId || null;
                 }
             }
         }
-        return null;
+        return null; // Student not found
     } catch (err) {
-        console.error('Error fetching data from Google Sheets API:', err);
+        console.error('Error processing request to Google Sheets API:', err);
+        // Throw a generic error to the caller, as we've already logged the specific one.
         throw new Error('Failed to communicate with Google Sheets.');
     }
 }
+
 
 export enum PersonCategory {
   STAFF = 'Staff',
