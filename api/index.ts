@@ -372,7 +372,7 @@ app.post('/people', async (c) => {
                 let googleSheetId: string;
                 try {
                     googleSheetId = await getSheetIdForStudent(student.firstName, student.lastName) ?? `GS-${Math.floor(10000 + Math.random() * 90000)}`;
-                } catch (e) {
+                } catch (e: any) {
                     console.warn(`Could not retrieve student ID from Google Sheet for ${student.firstName} ${student.lastName}. Falling back to random ID.`, e);
                     googleSheetId = `GS-${Math.floor(10000 + Math.random() * 90000)}`;
                 }
