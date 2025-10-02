@@ -1,2 +1,12 @@
 {
+  "rewrites": [
+    {
+      "source": "/api/public/diagnostics",
+      "destination": "/api/public/diagnostics"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index"
+    }
+  ]
 }

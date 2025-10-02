@@ -118,7 +118,7 @@ type AppContext = {
   };
 };
 
-const app = new Hono<AppContext>();
+const app = new Hono<AppContext>().basePath('/api');
 
 app.use('/*', async (c, next) => {
   const authHeader = c.req.header('Authorization');

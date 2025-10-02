@@ -3,7 +3,7 @@ import { handle } from 'hono/vercel';
 import { createClient } from '@supabase/supabase-js';
 
 // This is a lightweight, dedicated function to avoid timeouts on cold starts.
-const app = new Hono();
+const app = new Hono().basePath('/api/public');
 
 app.get('/diagnostics', async (c) => {
     const results: any = {
