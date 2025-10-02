@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabaseClient';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 import { useAuth } from '../contexts/AuthContext';
 import { UserManagement } from '../components/UserManagement';
+import { CheckCircleIcon } from '../components/icons/CheckCircleIcon';
+import { XCircleIcon } from '../components/icons/XCircleIcon';
 
 interface AdminDashboardProps {
     settings: Settings;
@@ -15,6 +17,93 @@ interface PendingUser {
     email: string;
     created_at: string;
 }
+
+const DiagnosticsTool: React.FC = () => {
+    const { session } = useAuth();
+    const [isDiagnosing, setIsDiagnosing] = useState(false);
+    const [results, setResults] = useState<any | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleRunDiagnostics = async () => {
+        setIsDiagnosing(true);
+        setError(null);
+        setResults(null);
+        if (!session?.access_token) {
+            setError("Authentication session has expired. Please log in again.");
+            setIsDiagnosing(false);
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/admin/diagnostics', {
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+
+            if (!response.ok) {
+                let errorBody;
+                try {
+                    errorBody = await response.json();
+                } catch (e) {
+                    errorBody = { error: 'Failed to parse error response from server.' };
+                }
+                throw new Error(errorBody.error || `API responded with status ${response.status}`);
+            }
+
+            const data = await response.json();
+            setResults(data);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsDiagnosing(false);
+        }
+    };
+
+    const ResultDisplay: React.FC<{ title: string; result: any; }> = ({ title, result }) => {
+        if (!result) return null;
+        const isSuccess = result.status === 'success';
+        return (
+            <div className="mt-4">
+                <div className="flex items-center">
+                    {isSuccess ? <CheckCircleIcon className="w-5 h-5 text-emerald-500" /> : <XCircleIcon className="w-5 h-5 text-red-500" />}
+                    <span className="ml-2 font-medium text-slate-800">{title}</span>
+                </div>
+                <div className="mt-2 pl-7 text-sm">
+                    {result.message && <p className="text-slate-600">{result.message}</p>}
+                    <pre className="mt-1 p-2 bg-slate-100 rounded-md text-xs text-slate-700 overflow-x-auto">
+                        {JSON.stringify(result.data || result.error, null, 2)}
+                    </pre>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="p-6 mt-8 bg-white rounded-lg shadow-md">
+            <h3 className="text-lg font-medium leading-6 text-slate-900">Diagnostics</h3>
+            <p className="mt-1 text-sm text-slate-500">
+                Run system checks to verify API, database, and data integrity.
+            </p>
+            <div className="mt-4">
+                <button
+                    onClick={handleRunDiagnostics}
+                    disabled={isDiagnosing}
+                    className="px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:bg-sky-300 flex items-center justify-center w-40"
+                >
+                    {isDiagnosing ? <SpinnerIcon /> : 'Run Diagnostics'}
+                </button>
+            </div>
+            {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+            {results && (
+                <div className="mt-6 border-t pt-4">
+                    <ResultDisplay title="Supabase Connection" result={results.supabaseConnection} />
+                    <ResultDisplay title="Settings Fetch" result={results.settingsFetch} />
+                    <ResultDisplay title="Sample Profile Fetch" result={results.sampleProfileFetch} />
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 const PendingUsers: React.FC = () => {
     const { session } = useAuth();
@@ -211,6 +300,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
                     </form>
                 </div>
                 
+                <DiagnosticsTool />
+
                 <PendingUsers />
 
                 <UserManagement />

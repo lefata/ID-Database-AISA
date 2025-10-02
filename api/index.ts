@@ -372,6 +372,7 @@ app.post('/people', async (c) => {
                 let googleSheetId: string;
                 try {
                     googleSheetId = await getSheetIdForStudent(student.firstName, student.lastName) ?? `GS-${Math.floor(10000 + Math.random() * 90000)}`;
+// FIX: The catch clause was missing its error parameter `(e)`, causing a reference error when trying to log the error.
                 } catch (e) {
                     console.warn(`Could not retrieve student ID from Google Sheet for ${student.firstName} ${student.lastName}. Falling back to random ID.`, e);
                     googleSheetId = `GS-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -548,6 +549,36 @@ adminApp.delete('/users/:id', async (c) => {
         return c.json({ error: 'Failed to delete user', details: e.message }, 500);
     }
 });
+
+adminApp.get('/diagnostics', async (c) => {
+    const supabase = c.get('supabase');
+    let results: any = {};
+
+    // 1. Check Supabase connection by fetching a simple record
+    const { error: dbError } = await supabase.from('settings').select('key').limit(1);
+    if (dbError) {
+        results.supabaseConnection = { status: 'error', error: dbError };
+        return c.json(results, 500);
+    }
+    results.supabaseConnection = { status: 'success', message: 'Successfully connected to Supabase.' };
+    
+    // 2. Fetch all settings
+    const { data: settingsData, error: settingsError } = await supabase.from('settings').select('key, value');
+    results.settingsFetch = {
+        status: settingsError ? 'error' : 'success',
+        data: settingsError ? settingsError : settingsData,
+    };
+    
+    // 3. Fetch a sample profile
+    const { data: profileData, error: profileError } = await supabase.from('people').select('*').limit(1);
+    results.sampleProfileFetch = {
+        status: profileError ? 'error' : 'success',
+        data: profileError ? profileError : profileData,
+    };
+
+    return c.json(results);
+});
+
 
 app.route('/admin', adminApp);
 
