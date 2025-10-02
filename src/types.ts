@@ -20,3 +20,10 @@ export interface Person {
 export interface Settings {
   [key: string]: string;
 }
+
+// A lightweight type for populating guardian/staff names
+export interface Associate {
+  id: number;
+  firstName: string;
+  lastName: string;
+}

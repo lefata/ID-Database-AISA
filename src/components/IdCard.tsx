@@ -1,12 +1,12 @@
 import React from 'react';
-import { Person, PersonCategory } from '../types';
+import { Person, PersonCategory, Associate } from '../types';
 import { UserIcon } from './icons/UserIcon';
 import { useAuth } from '../contexts/AuthContext';
 import { EditIcon } from './icons/EditIcon';
 
 interface IdCardProps {
     person: Person;
-    allPeople: Person[];
+    associates: Associate[]; // Lightweight list of parents/staff for lookups
     googleSheetUrl: string;
     onEdit: (person: Person) => void;
 }
@@ -29,12 +29,12 @@ const categoryStyles = {
     },
 };
 
-export const IdCard: React.FC<IdCardProps> = ({ person, allPeople, googleSheetUrl, onEdit }) => {
+export const IdCard: React.FC<IdCardProps> = ({ person, associates, googleSheetUrl, onEdit }) => {
     const styles = categoryStyles[person.category];
     const { isAdmin } = useAuth();
 
     const getGuardianName = (id: number) => {
-        const guardian = allPeople.find(p => p.id === id);
+        const guardian = associates.find(p => p.id === id);
         return guardian ? `${guardian.firstName} ${guardian.lastName}` : 'Unknown';
     };
     

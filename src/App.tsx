@@ -4,12 +4,13 @@ import { IdRepository } from './components/IdRepository';
 import { AddPersonForm } from './components/AddPersonForm';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { LoginPage } from './pages/LoginPage';
-import { Person, Settings } from './types';
+import { Person, Settings, Associate } from './types';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { supabase } from './lib/supabaseClient';
 import { SpinnerIcon } from './components/icons/SpinnerIcon';
 
 type View = 'repository' | 'add' | 'admin';
+const PAGE_LIMIT = 21;
 
 /**
  * A helper function to wrap a fetch request with a timeout.
@@ -39,46 +40,50 @@ async function fetchWithTimeout(resource: RequestInfo, options: RequestInit = {}
 }
 
 const AppContent: React.FC = () => {
-    const { session, isAdmin, loading } = useAuth();
+    const { session, isAdmin, loading: authLoading } = useAuth();
     const [view, setView] = useState<View>('repository');
     const [people, setPeople] = useState<Person[]>([]);
+    const [associates, setAssociates] = useState<Associate[]>([]);
     const [settings, setSettings] = useState<Settings>({});
+    const [totalPeople, setTotalPeople] = useState(0);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchData = useCallback(async () => {
+    const fetchAllData = useCallback(async (page: number, search: string) => {
         if (!session) return;
         setIsLoading(true);
         setError(null);
         try {
             const fetchOptions = { headers: { 'Authorization': `Bearer ${session.access_token}` } };
+            const peopleUrl = `/api/people?page=${page}&limit=${PAGE_LIMIT}&search=${encodeURIComponent(search)}`;
             
-            const [peopleResponse, settingsResponse] = await Promise.all([
-                fetchWithTimeout('/api/people', fetchOptions),
-                fetchWithTimeout('/api/settings', fetchOptions)
+            // Fetch people, settings, and the list of associates for guardian lookups
+            const [peopleResponse, settingsResponse, associatesResponse] = await Promise.all([
+                fetchWithTimeout(peopleUrl, fetchOptions),
+                fetchWithTimeout('/api/settings', fetchOptions),
+                fetchWithTimeout('/api/people/associates', fetchOptions)
             ]);
 
+            // Process People Response
             if (!peopleResponse.ok) {
-                const errorText = await peopleResponse.text();
-                console.error('Error fetching people:', { 
-                    status: peopleResponse.status, 
-                    statusText: peopleResponse.statusText, 
-                    body: errorText 
-                });
-                throw new Error(`Failed to fetch people. Server responded with ${peopleResponse.status} ${peopleResponse.statusText}.`);
+                 const errorText = await peopleResponse.text();
+                 console.error('Error fetching people:', { status: peopleResponse.status, body: errorText });
+                 throw new Error(`Failed to fetch people. Server responded with ${peopleResponse.status}.`);
             }
-            if (!settingsResponse.ok) {
-                 const errorText = await settingsResponse.text();
-                console.error('Error fetching settings:', {
-                    status: settingsResponse.status,
-                    statusText: settingsResponse.statusText,
-                    body: errorText
-                });
-                throw new Error(`Failed to fetch settings. Server responded with ${settingsResponse.status} ${settingsResponse.statusText}.`);
-            }
-            
-            setPeople(await peopleResponse.json());
+            const { people: fetchedPeople, total } = await peopleResponse.json();
+            setPeople(fetchedPeople);
+            setTotalPeople(total);
+            setCurrentPage(page);
+
+            // Process Settings Response
+            if (!settingsResponse.ok) throw new Error('Failed to fetch settings');
             setSettings(await settingsResponse.json());
+            
+            // Process Associates Response
+            if (!associatesResponse.ok) throw new Error('Failed to fetch associates for guardian lookups.');
+            setAssociates(await associatesResponse.json());
 
         } catch (err) {
             console.error("An error occurred during data fetching:", err);
@@ -88,17 +93,30 @@ const AppContent: React.FC = () => {
         }
     }, [session]);
 
-
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        // Initial data load
+        if(session) {
+            fetchAllData(1, '');
+        }
+    }, [session]); // Depend on session to trigger initial load
 
     const handleSuccess = () => {
-        fetchData();
+        // Refetch the current page after a successful add/edit/delete
+        fetchAllData(currentPage, searchTerm);
         setView('repository');
     };
 
-    if (loading) {
+    const handleSearchChange = (term: string) => {
+        setSearchTerm(term);
+        // Reset to page 1 for new search
+        fetchAllData(1, term);
+    };
+
+    const handlePageChange = (newPage: number) => {
+        fetchAllData(newPage, searchTerm);
+    };
+
+    if (authLoading) {
         return (
             <div className="flex items-center justify-center h-screen bg-slate-50">
                 <SpinnerIcon className="w-12 h-12 text-sky-600" />
@@ -111,20 +129,34 @@ const AppContent: React.FC = () => {
     }
 
     const renderContent = () => {
-        if (isLoading) return (
-            <div className="flex items-center justify-center h-96">
-                <SpinnerIcon className="w-10 h-10 text-sky-600" />
-            </div>
-        );
+        if (isLoading && people.length === 0) { // Only show full-page spinner on initial load
+            return (
+                <div className="flex items-center justify-center h-96">
+                    <SpinnerIcon className="w-10 h-10 text-sky-600" />
+                </div>
+            );
+        }
         if (error) return <div className="text-center p-10 text-red-600">Error: {error}</div>;
         
         switch (view) {
             case 'repository':
-                return <IdRepository people={people} settings={settings} onSuccess={handleSuccess} />;
+                return (
+                    <IdRepository
+                        people={people}
+                        associates={associates}
+                        settings={settings}
+                        onSuccess={handleSuccess}
+                        totalPeople={totalPeople}
+                        currentPage={currentPage}
+                        onPageChange={handlePageChange}
+                        onSearchChange={handleSearchChange}
+                        isLoading={isLoading}
+                    />
+                );
             case 'add':
                 return <AddPersonForm onSuccess={handleSuccess} people={people} />;
             case 'admin':
-                return isAdmin ? <AdminDashboard settings={settings} onSettingsUpdate={fetchData} /> : <div className="p-10 text-center">Access Denied.</div>;
+                return isAdmin ? <AdminDashboard settings={settings} onSettingsUpdate={handleSuccess} /> : <div className="p-10 text-center">Access Denied.</div>;
             default:
                 return null;
         }

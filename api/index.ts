@@ -273,18 +273,53 @@ app.put('/settings', async (c) => {
 // --- PEOPLE ROUTES ---
 app.get('/people', async (c) => {
   const supabase = c.get('supabase');
-  const { data, error } = await supabase.from('people').select('*').order('lastName').order('firstName');
+  const page = parseInt(c.req.query('page') || '1');
+  const limit = parseInt(c.req.query('limit') || '21');
+  const search = c.req.query('search') || '';
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  let query = supabase.from('people').select('*', { count: 'exact' });
+
+  if (search) {
+    // This search logic splits the search term by spaces and requires all words to match
+    // in either the first or last name in some combination.
+    // e.g., "leo co" will match "Leo Cole".
+    const searchWords = search.trim().split(' ').filter(w => w.length > 0);
+    const orConditions = searchWords.map(word => `firstName.ilike.%${word}%,lastName.ilike.%${word}%`).join(',');
+    query = query.or(orConditions);
+  }
+
+  const { data, error, count } = await query.order('lastName').order('firstName').range(from, to);
+
   if (error) {
     console.error('Supabase fetch error:', error);
     return c.json({ error: `Failed to fetch people: ${error.message}` }, 500);
   }
-  // Defensive check: ensure data is an array.
-  // A null response from the DB could cause downstream issues or a function crash.
+  
   if (!Array.isArray(data)) {
-      return c.json([]);
+      return c.json({ people: [], total: 0 });
   }
-  return c.json(data);
+
+  return c.json({ people: data, total: count || 0 });
 });
+
+app.get('/people/associates', async (c) => {
+    const supabase = c.get('supabase');
+    const { data, error } = await supabase
+        .from('people')
+        .select('id, firstName, lastName')
+        .in('category', [PersonCategory.STAFF, PersonCategory.PARENT])
+        .order('lastName')
+        .order('firstName');
+
+    if (error) {
+        console.error('Supabase fetch associates error:', error);
+        return c.json({ error: `Failed to fetch associates: ${error.message}` }, 500);
+    }
+    return c.json(data || []);
+});
+
 
 app.post('/people', async (c) => {
   const supabase = c.get('supabase');
