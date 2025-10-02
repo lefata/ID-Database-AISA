@@ -50,6 +50,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
     const [siblingSearch, setSiblingSearch] = useState('');
     const [siblingResults, setSiblingResults] = useState<Person[]>([]);
     const [isSiblingSearching, setIsSiblingSearching] = useState(false);
+    const accessToken = session?.access_token;
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, context: 'main' | string) => {
         const file = e.target.files?.[0];
@@ -73,14 +74,14 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
     };
 
     const debouncedGuardianSearch = useCallback(debounce(async (term: string) => {
-        if (term.length < 2 || !session) {
+        if (term.length < 2 || !accessToken) {
             setGuardianResults([]);
             setIsGuardianSearching(false);
             return;
         }
         try {
             const response = await fetch(`/api/associates?search=${encodeURIComponent(term)}`, {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             if (!response.ok) throw new Error('Search failed');
             const data = await response.json();
@@ -90,7 +91,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
         } finally {
             setIsGuardianSearching(false);
         }
-    }, 500), [session]);
+    }, 500), [accessToken]);
 
     const handleGuardianSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const term = e.target.value;
@@ -108,7 +109,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
     };
     
     const debouncedSiblingSearch = useCallback(debounce(async (term: string) => {
-        if (term.length < 2 || !session) {
+        if (term.length < 2 || !accessToken) {
             setSiblingResults([]);
             setIsSiblingSearching(false);
             return;
@@ -116,7 +117,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
         try {
             // Use the main /people endpoint to find students
             const response = await fetch(`/api/people?search=${encodeURIComponent(term)}&limit=5`, {
-                 headers: { 'Authorization': `Bearer ${session.access_token}` }
+                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             if (!response.ok) throw new Error('Search failed');
             const { people } = await response.json();
@@ -126,7 +127,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
         } finally {
             setIsSiblingSearching(false);
         }
-    }, 500), [session]);
+    }, 500), [accessToken]);
     
     const handleSiblingSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const term = e.target.value;
@@ -158,7 +159,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-        if (!session) { setError("You must be logged in to add profiles."); return; }
+        if (!accessToken) { setError("You must be logged in to add profiles."); return; }
         if (!firstName || !lastName || !roleOrClass || !image) { setError("All fields for the primary person, including photo, are required."); return; }
         if (category === PersonCategory.STUDENT && selectedGuardians.length === 0 && newGuardians.length === 0) { setError("A student must have at least one existing or new guardian associated."); return; }
         if (newGuardians.some(g => !g.firstName || !g.lastName || !g.image)) { setError("All fields and a photo are required for each new guardian."); return; }
@@ -176,7 +177,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
             
             const response = await fetch('/api/people', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
                 body: JSON.stringify([mainPersonPayload, ...newGuardianPayload]),
             });
 

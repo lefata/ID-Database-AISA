@@ -17,14 +17,15 @@ export const UserManagement: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [userToDelete, setUserToDelete] = useState<ManagedUser | null>(null);
+    const accessToken = session?.access_token;
 
     const fetchUsers = useCallback(async () => {
-        if (!session) return;
+        if (!accessToken) return;
         setIsLoading(true);
         setError(null);
         try {
             const response = await fetch('/api/admin/users', {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             if (!response.ok) {
                 const errData = await response.json();
@@ -37,21 +38,21 @@ export const UserManagement: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [session]);
+    }, [accessToken]);
 
     useEffect(() => {
         fetchUsers();
     }, [fetchUsers]);
 
     const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {
-        if (!session) return;
+        if (!accessToken) return;
         setUpdatingId(userId);
         setError(null);
         try {
             const response = await fetch(`/api/admin/users/${userId}/role`, {
                 method: 'PUT',
                 headers: { 
-                    'Authorization': `Bearer ${session.access_token}`,
+                    'Authorization': `Bearer ${accessToken}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ role: newRole }),
@@ -69,13 +70,13 @@ export const UserManagement: React.FC = () => {
     }
     
     const handleConfirmDelete = async () => {
-        if (!userToDelete || !session) return;
+        if (!userToDelete || !accessToken) return;
         setUpdatingId(userToDelete.id);
         setError(null);
         try {
             const response = await fetch(`/api/admin/users/${userToDelete.id}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${session.access_token}` },
+                headers: { 'Authorization': `Bearer ${accessToken}` },
             });
              if (!response.ok) {
                 const errData = await response.json();

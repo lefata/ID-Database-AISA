@@ -22,14 +22,15 @@ const PendingUsers: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
+    const accessToken = session?.access_token;
 
     const fetchPendingUsers = useCallback(async () => {
-        if (!session) return;
+        if (!accessToken) return;
         setIsLoading(true);
         setError(null);
         try {
             const response = await fetch('/api/admin/pending-users', {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             if (!response.ok) {
                 const errData = await response.json();
@@ -42,19 +43,19 @@ const PendingUsers: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [session]);
+    }, [accessToken]);
 
     useEffect(() => {
         fetchPendingUsers();
     }, [fetchPendingUsers]);
 
     const handleConfirmUser = async (userId: string) => {
-        if (!session) return;
+        if (!accessToken) return;
         setConfirmingId(userId);
         try {
             const response = await fetch(`/api/admin/users/${userId}/confirm`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
+                headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             if (!response.ok) {
                  const errData = await response.json();
@@ -129,7 +130,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
         setError(null);
         setSuccessMessage(null);
 
-        if (!session) {
+        if (!session?.access_token) {
             setError("Authentication session has expired. Please log in again.");
             setIsLoading(false);
             return;

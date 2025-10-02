@@ -38,6 +38,7 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
   const [guardianSearch, setGuardianSearch] = useState('');
   const [guardianResults, setGuardianResults] = useState<Associate[]>([]);
   const [isGuardianSearching, setIsGuardianSearching] = useState(false);
+  const accessToken = session?.access_token;
 
   useEffect(() => {
     setFormData({ ...person });
@@ -69,14 +70,14 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
   };
   
   const debouncedGuardianSearch = useCallback(debounce(async (term: string) => {
-      if (term.length < 2 || !session) {
+      if (term.length < 2 || !accessToken) {
           setGuardianResults([]);
           setIsGuardianSearching(false);
           return;
       }
       try {
           const response = await fetch(`/api/associates?search=${encodeURIComponent(term)}`, {
-              headers: { 'Authorization': `Bearer ${session.access_token}` }
+              headers: { 'Authorization': `Bearer ${accessToken}` }
           });
           if (!response.ok) throw new Error('Search failed');
           const data = await response.json();
@@ -86,7 +87,7 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
       } finally {
           setIsGuardianSearching(false);
       }
-  }, 500), [session]);
+  }, 500), [accessToken]);
 
   const handleGuardianSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const term = e.target.value;
@@ -108,7 +109,7 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
     setError(null);
     setIsSaving(true);
     
-    if (!session) { setError("Authentication session expired. Please log in again."); setIsSaving(false); return; }
+    if (!accessToken) { setError("Authentication session expired. Please log in again."); setIsSaving(false); return; }
 
     const updatePayload: Partial<Person> = {
       firstName: formData.firstName,
@@ -122,7 +123,7 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
     try {
         const response = await fetch(`/api/people/${person.id}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
             body: JSON.stringify(updatePayload),
         });
         if (!response.ok) {
