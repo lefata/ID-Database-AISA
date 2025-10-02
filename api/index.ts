@@ -120,9 +120,46 @@ type AppContext = {
 
 const app = new Hono<AppContext>().basePath('/api');
 
+// PUBLIC ROUTE - NO AUTHENTICATION REQUIRED
+app.get('/public/diagnostics', async (c) => {
+    const results: any = {
+        apiStatus: { status: 'Success', message: 'API server is responsive.' }
+    };
+
+    try {
+        const supabase = createClient(
+            process.env.SUPABASE_URL!,
+            process.env.SUPABASE_ANON_KEY!
+        );
+        // This query is expected to fail with an RLS error for an anonymous user.
+        // A successful connection followed by an RLS error proves connectivity is good.
+        // A different error (e.g., network timeout) will be caught.
+        const { error: dbError } = await supabase.from('settings').select('key').limit(1);
+        
+        if (dbError && dbError.message.includes('permission denied')) {
+            results.supabaseConnection = { status: 'Success', message: 'Successfully connected to Supabase. Row Level Security is correctly blocking anonymous access as expected.' };
+        } else if (dbError) {
+             throw dbError; // A more serious error occurred (e.g., connection timeout).
+        } else {
+            // This case should not be hit if RLS is on, but indicates a successful query if it is.
+            results.supabaseConnection = { status: 'Success', message: 'Successfully connected and queried Supabase.' };
+        }
+    } catch (e: any) {
+        results.supabaseConnection = { status: 'Failed', error: { message: e.message, code: e.code, details: 'This could be due to incorrect SUPABASE_URL/ANON_KEY or a network issue.' } };
+    }
+
+    return c.json(results);
+});
+
+
 app.use('/*', async (c, next) => {
+  // Bypass auth for public routes if any more are added
+  if (c.req.path.startsWith('/api/public/')) {
+    return next();
+  }
+
   if (c.req.path.endsWith('/diagnostics') && c.req.method === 'GET' && c.get('user')?.user_metadata?.role === 'admin') {
-      // Allow diagnostics endpoint for admins
+      // Allow admin diagnostics endpoint
   } else {
     const authHeader = c.req.header('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
