@@ -190,6 +190,9 @@ app.get('/settings', async (c) => {
         console.error('Supabase settings fetch error:', error);
         return c.json({ error: 'Failed to fetch settings' }, 500);
     }
+    if (!data) {
+        return c.json({});
+    }
     const settings = data.reduce((acc, { key, value }) => {
         acc[key] = value;
         return acc;
@@ -226,6 +229,9 @@ app.get('/people', async (c) => {
   if (error) {
     console.error('Supabase fetch error:', error);
     return c.json({ error: `Failed to fetch people: ${error.message}` }, 500);
+  }
+  if (!data) {
+    return c.json([]);
   }
   return c.json(data);
 });
