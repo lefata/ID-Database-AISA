@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { XCircleIcon } from './icons/XCircleIcon';
+import { runPublicDiagnostics } from '../services/apiService';
 
 interface DiagnosticsModalProps {
   isOpen: boolean;
@@ -40,17 +41,7 @@ export const DiagnosticsModal: React.FC<DiagnosticsModalProps> = ({ isOpen, onCl
         setError(null);
         setResults(null);
         try {
-            const response = await fetch('/api/public/diagnostics');
-            if (!response.ok) {
-                 let errorBody;
-                try {
-                    errorBody = await response.json();
-                } catch (e) {
-                    errorBody = { error: 'Failed to parse error response from server.' };
-                }
-                throw new Error(errorBody.error || `API responded with status ${response.status}`);
-            }
-            const data = await response.json();
+            const data = await runPublicDiagnostics();
             setResults(data);
         } catch (err: any) {
             setError(err.message);

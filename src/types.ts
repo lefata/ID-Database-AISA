@@ -28,3 +28,18 @@ export interface Associate {
   firstName: string;
   lastName: string;
 }
+
+// Data shape for creating a new person, before it has a database ID or generated bio.
+export type NewPersonData = Omit<Person, 'id' | 'bio' | 'googleSheetId' | 'guardianDetails'> & { tempId: string, guardianTempIds?: string[] };
+
+export interface PendingUser {
+    id: string;
+    email: string;
+    created_at: string;
+}
+
+export interface ManagedUser {
+    id: string;
+    email: string;
+    role: 'admin' | 'user';
+}

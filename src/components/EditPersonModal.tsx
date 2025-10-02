@@ -5,6 +5,7 @@ import { CameraIcon } from './icons/CameraIcon';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { ImageCropModal } from './ImageCropModal';
 import { UserIcon } from './icons/UserIcon';
+import { searchAssociates, updatePerson } from '../services/apiService';
 
 interface EditPersonModalProps {
   person: Person;
@@ -78,11 +79,7 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
           return;
       }
       try {
-          const response = await fetch(`/api/associates?search=${encodeURIComponent(term)}`, {
-              headers: { 'Authorization': `Bearer ${accessToken}` }
-          });
-          if (!response.ok) throw new Error('Search failed');
-          const data = await response.json();
+          const data = await searchAssociates(accessToken, term);
           setGuardianResults(data);
       } catch (err) {
           console.error(err);
@@ -124,15 +121,7 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
     };
     
     try {
-        const response = await fetch(`/api/people/${person.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-            body: JSON.stringify(updatePayload),
-        });
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || 'Failed to update profile.');
-        }
+        await updatePerson(accessToken, person.id, updatePayload);
         onSuccess();
     } catch (err: any) {
         setError(err.message);

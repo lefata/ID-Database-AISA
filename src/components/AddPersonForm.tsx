@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Person, PersonCategory, Associate } from '../types';
+import { Person, PersonCategory, Associate, NewPersonData } from '../types';
 import { UserIcon } from './icons/UserIcon';
 import { CameraIcon } from './icons/CameraIcon';
 import { SpinnerIcon } from './icons/SpinnerIcon';
@@ -7,12 +7,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { TrashIcon } from './icons/TrashIcon';
 import { ImageCropModal } from './ImageCropModal';
 import { SearchIcon } from './icons/SearchIcon';
+import { createPeople, searchAssociates } from '../services/apiService';
 
 interface AddPersonFormProps {
     onSuccess: () => void;
 }
 
-type NewPersonData = Omit<Person, 'id' | 'bio' | 'googleSheetId' | 'guardianDetails'> & { tempId: string, guardianTempIds?: string[] };
 type NewGuardianData = Omit<NewPersonData, 'category' | 'role' | 'class' | 'guardianIds' | 'guardianDetails'>;
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
@@ -82,11 +82,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
             return;
         }
         try {
-            const response = await fetch(`/api/associates?search=${encodeURIComponent(term)}`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (!response.ok) throw new Error('Search failed');
-            const data = await response.json();
+            const data = await searchAssociates(accessToken, term);
             setGuardianResults(data);
         } catch (err) {
             console.error(err);
@@ -178,16 +174,8 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
                 ...(category === PersonCategory.STUDENT && { guardianIds: selectedGuardians.map(g => g.id), guardianTempIds: newGuardians.map(g => g.tempId) }),
             };
             
-            const response = await fetch('/api/people', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-                body: JSON.stringify([mainPersonPayload, ...newGuardianPayload]),
-            });
+            await createPeople(accessToken, [mainPersonPayload, ...newGuardianPayload]);
 
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Failed to save profiles.');
-            }
             onSuccess();
             resetForm();
         } catch (err) {

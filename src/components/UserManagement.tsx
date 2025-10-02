@@ -3,12 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
-
-interface ManagedUser {
-    id: string;
-    email: string;
-    role: 'admin' | 'user';
-}
+import { getUsers, updateUserRole, deleteUser } from '../services/apiService';
+import { ManagedUser } from '../types';
 
 export const UserManagement: React.FC = () => {
     const { session, user: currentUser } = useAuth();
@@ -27,14 +23,7 @@ export const UserManagement: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch('/api/admin/users', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Failed to fetch users.');
-            }
-            const data = await response.json();
+            const data = await getUsers(accessToken);
             setUsers(data);
         } catch (err: any) {
             setError(err.message);
@@ -53,18 +42,7 @@ export const UserManagement: React.FC = () => {
         setUpdatingId(userId);
         setError(null);
         try {
-            const response = await fetch(`/api/admin/users/${userId}/role`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ role: newRole }),
-            });
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Failed to update user role.');
-            }
+            await updateUserRole(accessToken, userId, newRole);
             await fetchUsers(); // Refresh list on success
         } catch (err: any) {
             setError(`Failed to update role: ${err.message}`);
@@ -79,14 +57,7 @@ export const UserManagement: React.FC = () => {
         setUpdatingId(userToDelete.id);
         setError(null);
         try {
-            const response = await fetch(`/api/admin/users/${userToDelete.id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${accessToken}` },
-            });
-             if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Failed to delete user.');
-            }
+            await deleteUser(accessToken, userToDelete.id);
             await fetchUsers(); // Refresh list
         } catch (err: any) {
             setError(`Failed to delete user: ${err.message}`);

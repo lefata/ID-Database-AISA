@@ -7,29 +7,10 @@ import { LoginPage } from './pages/LoginPage';
 import { Person, Settings } from './types';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SpinnerIcon } from './components/icons/SpinnerIcon';
+import { getPeople, getSettings } from './services/apiService';
 
 type View = 'repository' | 'add' | 'admin';
 const PAGE_LIMIT = 21;
-
-async function fetchWithTimeout(resource: RequestInfo, options: RequestInit = {}, timeout = 15000) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  
-  try {
-    const response = await fetch(resource, {
-      ...options,
-      signal: controller.signal  
-    });
-    clearTimeout(id);
-    return response;
-  } catch (error: any) {
-    clearTimeout(id);
-    if (error.name === 'AbortError') {
-      throw new Error(`Request timed out after ${timeout / 1000} seconds.`);
-    }
-    throw error;
-  }
-}
 
 const AppContent: React.FC = () => {
     const { session, isAdmin, loading: authLoading } = useAuth();
@@ -53,26 +34,16 @@ const AppContent: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const fetchOptions = { headers: { 'Authorization': `Bearer ${currentSession.access_token}` } };
-            const peopleUrl = `/api/people?page=${page}&limit=${PAGE_LIMIT}&search=${encodeURIComponent(search)}`;
-            
-            const [peopleResponse, settingsResponse] = await Promise.all([
-                fetchWithTimeout(peopleUrl, fetchOptions),
-                fetchWithTimeout('/api/settings', fetchOptions),
+            const token = currentSession.access_token;
+            const [peopleData, settingsData] = await Promise.all([
+                getPeople(token, page, PAGE_LIMIT, search),
+                getSettings(token),
             ]);
 
-            if (!peopleResponse.ok) {
-                 const errorText = await peopleResponse.text();
-                 console.error('Error fetching people:', { status: peopleResponse.status, body: errorText });
-                 throw new Error(`Failed to fetch people. Server responded with ${peopleResponse.status}.`);
-            }
-            const { people: fetchedPeople, total } = await peopleResponse.json();
-            setPeople(fetchedPeople);
-            setTotalPeople(total);
+            setPeople(peopleData.people);
+            setTotalPeople(peopleData.total);
             setCurrentPage(page);
-
-            if (!settingsResponse.ok) throw new Error('Failed to fetch settings');
-            setSettings(await settingsResponse.json());
+            setSettings(settingsData);
 
         } catch (err) {
             console.error("An error occurred during data fetching:", err);

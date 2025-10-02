@@ -1,21 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Settings } from '../types';
-import { supabase } from '../lib/supabaseClient';
+import { Settings, PendingUser } from '../types';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 import { useAuth } from '../contexts/AuthContext';
 import { UserManagement } from '../components/UserManagement';
 import { CheckCircleIcon } from '../components/icons/CheckCircleIcon';
 import { XCircleIcon } from '../components/icons/XCircleIcon';
+import { updateSetting, runAdminDiagnostics, getPendingUsers, confirmUser } from '../services/apiService';
 
 interface AdminDashboardProps {
     settings: Settings;
     onSettingsUpdate: () => void;
-}
-
-interface PendingUser {
-    id: string;
-    email: string;
-    created_at: string;
 }
 
 const DiagnosticsTool: React.FC = () => {
@@ -35,21 +29,7 @@ const DiagnosticsTool: React.FC = () => {
         }
 
         try {
-            const response = await fetch('/api/admin/diagnostics', {
-                headers: { 'Authorization': `Bearer ${session.access_token}` }
-            });
-
-            if (!response.ok) {
-                let errorBody;
-                try {
-                    errorBody = await response.json();
-                } catch (e) {
-                    errorBody = { error: 'Failed to parse error response from server.' };
-                }
-                throw new Error(errorBody.error || `API responded with status ${response.status}`);
-            }
-
-            const data = await response.json();
+            const data = await runAdminDiagnostics(session.access_token);
             setResults(data);
         } catch (err: any) {
             setError(err.message);
@@ -124,14 +104,7 @@ const PendingUsers: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch('/api/admin/pending-users', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Failed to fetch pending users.');
-            }
-            const data = await response.json();
+            const data = await getPendingUsers(accessToken);
             setPendingUsers(data);
         } catch (err: any) {
             setError(err.message);
@@ -149,14 +122,7 @@ const PendingUsers: React.FC = () => {
         if (!accessToken) return;
         setConfirmingId(userId);
         try {
-            const response = await fetch(`/api/admin/users/${userId}/confirm`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (!response.ok) {
-                 const errData = await response.json();
-                throw new Error(errData.error || 'Failed to confirm user.');
-            }
+            await confirmUser(accessToken, userId);
             await fetchPendingUsers();
         } catch (err: any) {
             setError(err.message);
@@ -232,20 +198,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
         }
 
         try {
-            const response = await fetch('/api/settings', {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`,
-                },
-                body: JSON.stringify({ key: 'googleSheetUrl', value: sheetUrl }),
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Failed to save settings.');
-            }
-
+            await updateSetting(session.access_token, 'googleSheetUrl', sheetUrl);
             setSuccessMessage('Settings saved successfully!');
             onSettingsUpdate(); // Refresh settings in parent
         } catch (err: any) {
