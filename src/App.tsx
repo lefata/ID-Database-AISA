@@ -90,7 +90,7 @@ const AppContent: React.FC = () => {
             setPeople([]);
             setTotalPeople(0);
         }
-    }, [userId, authLoading, fetchAllData]);
+    }, [userId, authLoading, searchTerm, fetchAllData]);
 
     const handleSuccess = useCallback(() => {
         fetchAllData(currentPage, searchTerm);
@@ -154,7 +154,7 @@ const AppContent: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <Header currentView={view} onViewChange={setView} />
+            <Header currentView={view} onViewChange={setView} isAdmin={isAdmin} />
             <main>{renderContent()}</main>
         </div>
     );

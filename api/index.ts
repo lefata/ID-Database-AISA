@@ -121,25 +121,33 @@ type AppContext = {
 const app = new Hono<AppContext>().basePath('/api');
 
 app.use('/*', async (c, next) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Unauthorized' }, 401);
+  if (c.req.path.endsWith('/diagnostics') && c.req.method === 'GET' && c.get('user')?.user_metadata?.role === 'admin') {
+      // Allow diagnostics endpoint for admins
+  } else {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
   }
 
+  const authHeader = c.req.header('Authorization');
   const supabase = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_ANON_KEY!,
     {
-      global: { headers: { Authorization: authHeader } },
+      global: { headers: { Authorization: authHeader || '' } },
       auth: { autoRefreshToken: false, persistSession: false },
     }
   );
-
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) {
-    return c.json({ error: 'Invalid token' }, 401);
+  
+  if (authHeader) {
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data.user) {
+        return c.json({ error: 'Invalid token' }, 401);
+      }
+      c.set('user', data.user);
   }
-  c.set('user', data.user);
+  
   c.set('supabase', supabase);
   await next();
 });
@@ -372,7 +380,7 @@ app.post('/people', async (c) => {
                 let googleSheetId: string;
                 try {
                     googleSheetId = await getSheetIdForStudent(student.firstName, student.lastName) ?? `GS-${Math.floor(10000 + Math.random() * 90000)}`;
-                } catch (e: any) {
+                } catch (e) {
                     console.warn(`Could not retrieve student ID from Google Sheet for ${student.firstName} ${student.lastName}. Falling back to random ID.`, e);
                     googleSheetId = `GS-${Math.floor(10000 + Math.random() * 90000)}`;
                 }
@@ -556,22 +564,23 @@ adminApp.get('/diagnostics', async (c) => {
     // 1. Check Supabase connection by fetching a simple record
     const { error: dbError } = await supabase.from('settings').select('key').limit(1);
     if (dbError) {
-        results.supabaseConnection = { status: 'error', error: dbError };
-        return c.json(results, 500);
+        results.supabaseConnection = { status: 'Failed', error: dbError };
+        // Don't return early, try other checks
+    } else {
+        results.supabaseConnection = { status: 'Success', message: 'Successfully connected to Supabase.' };
     }
-    results.supabaseConnection = { status: 'success', message: 'Successfully connected to Supabase.' };
     
     // 2. Fetch all settings
     const { data: settingsData, error: settingsError } = await supabase.from('settings').select('key, value');
     results.settingsFetch = {
-        status: settingsError ? 'error' : 'success',
+        status: settingsError ? 'Failed' : 'Success',
         data: settingsError ? settingsError : settingsData,
     };
     
     // 3. Fetch a sample profile
     const { data: profileData, error: profileError } = await supabase.from('people').select('*').limit(1);
     results.sampleProfileFetch = {
-        status: profileError ? 'error' : 'success',
+        status: profileError ? 'Failed' : 'Success',
         data: profileError ? profileError : profileData,
     };
 

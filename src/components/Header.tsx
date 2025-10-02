@@ -7,10 +7,11 @@ type View = 'repository' | 'add' | 'admin';
 interface HeaderProps {
     currentView: View;
     onViewChange: (view: View) => void;
+    isAdmin: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
-    const { user, isAdmin, logout } = useAuth();
+export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange, isAdmin }) => {
+    const { user, logout } = useAuth();
     const activeClass = "bg-sky-600 text-white";
     const inactiveClass = "bg-white text-slate-600 hover:bg-slate-100";
 

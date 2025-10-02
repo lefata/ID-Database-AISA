@@ -60,18 +60,20 @@ const DiagnosticsTool: React.FC = () => {
 
     const ResultDisplay: React.FC<{ title: string; result: any; }> = ({ title, result }) => {
         if (!result) return null;
-        const isSuccess = result.status === 'success';
+        const isSuccess = result.status === 'Success';
         return (
             <div className="mt-4">
                 <div className="flex items-center">
                     {isSuccess ? <CheckCircleIcon className="w-5 h-5 text-emerald-500" /> : <XCircleIcon className="w-5 h-5 text-red-500" />}
-                    <span className="ml-2 font-medium text-slate-800">{title}</span>
+                    <span className="ml-2 font-medium text-slate-800">{title}: <span className={isSuccess ? 'text-emerald-600' : 'text-red-600'}>{result.status}</span></span>
                 </div>
                 <div className="mt-2 pl-7 text-sm">
                     {result.message && <p className="text-slate-600">{result.message}</p>}
-                    <pre className="mt-1 p-2 bg-slate-100 rounded-md text-xs text-slate-700 overflow-x-auto">
-                        {JSON.stringify(result.data || result.error, null, 2)}
-                    </pre>
+                    {(result.data || result.error) && (
+                        <pre className="mt-1 p-2 bg-slate-100 rounded-md text-xs text-slate-700 overflow-x-auto">
+                            {JSON.stringify(result.data || result.error, null, 2)}
+                        </pre>
+                    )}
                 </div>
             </div>
         );
@@ -95,6 +97,7 @@ const DiagnosticsTool: React.FC = () => {
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
             {results && (
                 <div className="mt-6 border-t pt-4">
+                    <ResultDisplay title="API Health Check" result={{ status: 'Success', message: 'API endpoint is responsive.'}} />
                     <ResultDisplay title="Supabase Connection" result={results.supabaseConnection} />
                     <ResultDisplay title="Settings Fetch" result={results.settingsFetch} />
                     <ResultDisplay title="Sample Profile Fetch" result={results.sampleProfileFetch} />
