@@ -42,12 +42,14 @@ const AppContent: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const accessToken = session?.access_token;
+
     const fetchAllData = useCallback(async (page: number, search: string) => {
-        if (!session) return;
+        if (!accessToken) return;
         setIsLoading(true);
         setError(null);
         try {
-            const fetchOptions = { headers: { 'Authorization': `Bearer ${session.access_token}` } };
+            const fetchOptions = { headers: { 'Authorization': `Bearer ${accessToken}` } };
             const peopleUrl = `/api/people?page=${page}&limit=${PAGE_LIMIT}&search=${encodeURIComponent(search)}`;
             
             const [peopleResponse, settingsResponse] = await Promise.all([
@@ -74,13 +76,16 @@ const AppContent: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [session]);
+    }, [accessToken]);
 
     useEffect(() => {
-        if(session) {
-            fetchAllData(1, '');
+        if (accessToken) {
+            fetchAllData(1, searchTerm);
+        } else if (!authLoading) {
+            // If there's no session and we're not in an auth loading state, stop the app's loading spinner.
+            setIsLoading(false);
         }
-    }, [session]);
+    }, [accessToken, authLoading]);
 
     const handleSuccess = () => {
         fetchAllData(currentPage, searchTerm);
@@ -109,7 +114,8 @@ const AppContent: React.FC = () => {
     }
 
     const renderContent = () => {
-        if (isLoading && people.length === 0) {
+        // Show loading spinner if auth is done but we're fetching data for the first time
+        if (isLoading && people.length === 0 && !error) {
             return (
                 <div className="flex items-center justify-center h-96">
                     <SpinnerIcon className="w-10 h-10 text-sky-600" />
