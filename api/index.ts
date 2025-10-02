@@ -43,7 +43,7 @@ async function getSheetsClient() {
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   });
 
-  const authClient = await auth.getClient() as any;
+  const authClient = await withTimeout(auth.getClient(), 15000) as any;
   sheets = google.sheets({ version: 'v4', auth: authClient });
   return sheets;
 }
@@ -63,17 +63,15 @@ async function getSheetIdForStudent(firstName: string, lastName:string): Promise
     const range = `${sheetName}!A:M`;
 
     try {
-        const response = await client.spreadsheets.values.get(
-            {
-                spreadsheetId: sheetId,
-                range: range,
-            },
-            {
-                timeout: 20000,
-            }
-        );
+        const promise = client.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: range,
+        });
 
-        const rows = response.data.values;
+        const response = await withTimeout(promise, 20000);
+
+        // FIX: Cast response to any to access the 'data' property from the Google Sheets API response.
+        const rows = (response as any).data.values;
         if (rows && rows.length) {
             for (const row of rows) {
                 const rowFirstName = row[0] || '';

@@ -1,5 +1,24 @@
 import { google } from 'googleapis';
 
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Operation timed out after ${ms}ms`));
+    }, ms);
+
+    promise.then(
+      (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+};
+
 // Cache the client so we don't re-authenticate on every request
 let sheets: any;
 
@@ -23,7 +42,7 @@ async function getSheetsClient() {
 
   // The 'googleapis' library has complex types; casting to 'any' is a pragmatic
   // way to resolve the TS2769 error while maintaining runtime correctness.
-  const authClient = await auth.getClient() as any;
+  const authClient = await withTimeout(auth.getClient(), 15000) as any;
   sheets = google.sheets({ version: 'v4', auth: authClient });
   return sheets;
 }
@@ -51,12 +70,14 @@ export async function getSheetIdForStudent(firstName: string, lastName: string):
     const range = `${sheetName}!A:M`;
 
     try {
-        const response = await client.spreadsheets.values.get({
+        const promise = client.spreadsheets.values.get({
             spreadsheetId: sheetId,
             range: range,
         });
+        const response = await withTimeout(promise, 20000);
 
-        const rows = response.data.values;
+        // FIX: Cast response to any to access the 'data' property from the Google Sheets API response.
+        const rows = (response as any).data.values;
         if (rows && rows.length) {
             for (const row of rows) {
                 const rowFirstName = row[0] || '';
