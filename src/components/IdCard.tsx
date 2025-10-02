@@ -6,7 +6,7 @@ import { EditIcon } from './icons/EditIcon';
 
 interface IdCardProps {
     person: Person;
-    googleSheetUrl: string;
+    googleSheetId: string;
     onEdit: (person: Person) => void;
 }
 
@@ -28,18 +28,19 @@ const categoryStyles = {
     },
 };
 
-export const IdCard: React.FC<IdCardProps> = ({ person, googleSheetUrl, onEdit }) => {
+export const IdCard: React.FC<IdCardProps> = ({ person, googleSheetId, onEdit }) => {
     const styles = categoryStyles[person.category];
     const { isAdmin } = useAuth();
     
     const IdTag = () => {
         const content = `ID: ${person.googleSheetId}`;
         const className = `px-3 py-1 text-xs font-medium rounded-full ${styles.tag}`;
+        const sheetUrl = googleSheetId ? `https://docs.google.com/spreadsheets/d/${googleSheetId}/` : '';
         
-        if (googleSheetUrl && !googleSheetUrl.includes('your-sheet-id-here')) {
+        if (sheetUrl && !sheetUrl.includes('your-sheet-id-here')) {
             return (
                 <a 
-                  href={googleSheetUrl} 
+                  href={sheetUrl} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className={`${className} hover:ring-2 hover:ring-offset-1 hover:ring-sky-500 transition-all`}

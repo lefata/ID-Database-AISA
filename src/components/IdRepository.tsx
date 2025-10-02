@@ -33,7 +33,7 @@ export const IdRepository: React.FC<IdRepositoryProps> = ({
     const [editingPerson, setEditingPerson] = useState<Person | null>(null);
     const searchTimeout = useRef<number | null>(null);
 
-    const googleSheetUrl = settings.googleSheetUrl || '';
+    const googleSheetId = settings.googleSheetId || '';
     
     const handleEditSuccess = () => {
         setEditingPerson(null);
@@ -95,7 +95,7 @@ export const IdRepository: React.FC<IdRepositoryProps> = ({
                                     <IdCard
                                       key={person.id}
                                       person={person}
-                                      googleSheetUrl={googleSheetUrl}
+                                      googleSheetId={googleSheetId}
                                       onEdit={setEditingPerson}
                                     />
                                 ))}

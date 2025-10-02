@@ -23,15 +23,26 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   });
 };
 
-async function getSheetIdForStudent(firstName: string, lastName: string): Promise<string | null> {
-    const sheetId = process.env.GOOGLE_SHEET_ID;
+async function getSheetIdForStudent(supabase: SupabaseClient, firstName: string, lastName: string): Promise<string | null> {
+    const { data: settingsData, error: settingsError } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'googleSheetId')
+      .single();
+      
+    if (settingsError) {
+        console.error('Could not fetch googleSheetId from settings:', settingsError);
+        return null;
+    }
+
+    const sheetId = settingsData?.value;
     const apiKey = process.env.API_KEY_ALIAS_FOR_GEMINI;
     const sheetName = process.env.GOOGLE_SHEET_NAME || 'Sheet1';
 
-    if (!sheetId || !apiKey) {
-        let warning = 'Google Sheet lookup is disabled. Missing environment variable(s):';
-        if (!sheetId) warning += ' GOOGLE_SHEET_ID';
-        if (!apiKey) warning += ' API_KEY_ALIAS_FOR_GEMINI';
+    if (!sheetId || !apiKey || sheetId.includes('your-sheet-id-here')) {
+        let warning = 'Google Sheet lookup is disabled. Missing or invalid configuration:';
+        if (!sheetId || sheetId.includes('your-sheet-id-here')) warning += ' Google Sheet ID not set in Admin Dashboard.';
+        if (!apiKey) warning += ' Missing API_KEY_ALIAS_FOR_GEMINI environment variable.';
         console.warn(warning);
         return null;
     }
@@ -352,7 +363,7 @@ app.post('/people', async (c) => {
                 
                 let googleSheetId: string;
                 try {
-                    googleSheetId = await getSheetIdForStudent(student.firstName, student.lastName) ?? `GS-${Math.floor(10000 + Math.random() * 90000)}`;
+                    googleSheetId = await getSheetIdForStudent(supabase, student.firstName, student.lastName) ?? `GS-${Math.floor(10000 + Math.random() * 90000)}`;
                 } catch (e) {
                     console.warn(`Could not retrieve student ID from Google Sheet for ${student.firstName} ${student.lastName}. Falling back to random ID.`, e);
                     googleSheetId = `GS-${Math.floor(10000 + Math.random() * 90000)}`;

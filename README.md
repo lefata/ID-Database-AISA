@@ -6,7 +6,7 @@ A modern web application to manage and browse ID profiles for staff, students, a
 
 -   **User Authentication**: Secure login system powered by Supabase Auth, with admin approval for new sign-ups.
 -   **Automated Admin Setup**: The very first user to sign up is automatically granted admin privileges.
--   **Admin Dashboard**: A protected area for administrators to approve new users, manage their roles (admin/user), delete users, and configure application settings.
+-   **Admin Dashboard**: A protected area for administrators to approve new users, manage their roles (admin/user), delete users, and configure application settings (like the Google Sheet ID).
 -   **Optimized Image Handling**: Profile photos are stored in Supabase Storage for fast, efficient delivery, preventing API timeouts and improving load times.
 -   **Google Sheet Integration**: Automatically retrieves a student's unique ID from a designated public Google Sheet upon profile creation, ensuring data consistency.
 -   **Categorized Profiles**: Create and manage profiles for Staff, Students, and Parents.
@@ -67,7 +67,7 @@ Follow these steps to get the project running on your local machine.
     API_KEY_ALIAS_FOR_GEMINI="your_google_cloud_api_key"
     
     # Google Sheets Integration (for retrieving student IDs)
-    GOOGLE_SHEET_ID="your_google_sheet_id"
+    # Note: The Google Sheet ID is now configured in the Admin Dashboard.
     GOOGLE_SHEET_NAME="Sheet1" # The name of the sheet/tab to search in
     ```
 
@@ -214,10 +214,11 @@ To allow the application to read Student IDs from your spreadsheet, you need to 
     -   Ensure the role is set to **"Viewer"**.
     -   Click **Done**.
 
-3.  **Set Environment Variables:**
-    -   Open your `.env` file.
-    -   **`GOOGLE_SHEET_ID`**: Get this from your sheet's URL: `https://docs.google.com/spreadsheets/d/THIS_IS_THE_ID/edit`.
-    -   **`API_KEY_ALIAS_FOR_GEMINI`**: Your Google Cloud API Key.
+3.  **Configure in Admin Dashboard:**
+    -   Once you are logged in as an admin, go to the **Admin** page.
+    -   Find the "Google Sheet ID" field.
+    -   Get this ID from your sheet's URL: `https://docs.google.com/spreadsheets/d/THIS_IS_THE_ID/edit`.
+    -   Paste the ID into the field and save.
 
 ### 6. Create Your Admin User
 
@@ -236,5 +237,5 @@ To allow the application to read Student IDs from your spreadsheet, you need to 
     -   Import your Git repository into Vercel.
 
 2.  **Configure Environment Variables:**
-    -   In the Vercel project settings, add all the environment variables from your `.env` file.
+    -   In the Vercel project settings, add all the environment variables from your `.env` file (except for `GOOGLE_SHEET_ID`, which is managed in the app).
     -   Click "Deploy".

@@ -123,11 +123,11 @@ async function checkAndSeed() {
     const { data: settings, error: settingsError } = await supabase.from('settings').select('key');
     if(settingsError) throw settingsError;
     
-    if (!settings.find(s => s.key === 'googleSheetUrl')) {
+    if (!settings.find(s => s.key === 'googleSheetId')) {
         console.log('🌱 Seeding initial settings...');
         await supabase.from('settings').upsert({
-            key: 'googleSheetUrl',
-            value: 'https://docs.google.com/spreadsheets/d/your-sheet-id-here/'
+            key: 'googleSheetId',
+            value: 'your-sheet-id-here'
         });
         console.log('✅ Initial settings seeded.');
     } else {

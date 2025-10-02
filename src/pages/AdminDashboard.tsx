@@ -180,7 +180,7 @@ const PendingUsers: React.FC = () => {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSettingsUpdate }) => {
     const { session } = useAuth();
-    const [sheetUrl, setSheetUrl] = useState(settings.googleSheetUrl || '');
+    const [sheetId, setSheetId] = useState(settings.googleSheetId || '');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -198,7 +198,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
         }
 
         try {
-            await updateSetting(session.access_token, 'googleSheetUrl', sheetUrl);
+            await updateSetting(session.access_token, 'googleSheetId', sheetId);
             setSuccessMessage('Settings saved successfully!');
             onSettingsUpdate(); // Refresh settings in parent
         } catch (err: any) {
@@ -222,22 +222,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
                         <h3 className="text-lg font-medium leading-6 text-slate-900">Configuration</h3>
                         <div className="mt-4 space-y-4">
                             <div>
-                                <label htmlFor="googleSheetUrl" className="block text-sm font-medium text-slate-700">
-                                    Google Sheet URL
+                                <label htmlFor="googleSheetId" className="block text-sm font-medium text-slate-700">
+                                    Google Sheet ID
                                 </label>
                                 <div className="mt-1">
                                     <input
-                                        type="url"
-                                        name="googleSheetUrl"
-                                        id="googleSheetUrl"
+                                        type="text"
+                                        name="googleSheetId"
+                                        id="googleSheetId"
                                         className="block w-full border-slate-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
-                                        placeholder="https://docs.google.com/spreadsheets/d/your-sheet-id/"
-                                        value={sheetUrl}
-                                        onChange={(e) => setSheetUrl(e.target.value)}
+                                        placeholder="your-sheet-id-from-the-url"
+                                        value={sheetId}
+                                        onChange={(e) => setSheetId(e.target.value)}
                                     />
                                 </div>
                                 <p className="mt-2 text-sm text-slate-500">
-                                    This is the base URL for the spreadsheet where ID records are kept. The Profile ID will be linked to this address.
+                                    The ID of your Google Sheet. Found in the URL: `.../spreadsheets/d/`**`THIS_IS_THE_ID`**`/edit`.
                                 </p>
                             </div>
                         </div>
