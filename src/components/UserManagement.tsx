@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { TrashIcon } from './icons/TrashIcon';
@@ -17,9 +17,12 @@ export const UserManagement: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [userToDelete, setUserToDelete] = useState<ManagedUser | null>(null);
-    const accessToken = session?.access_token;
+    
+    const sessionRef = useRef(session);
+    sessionRef.current = session;
 
     const fetchUsers = useCallback(async () => {
+        const accessToken = sessionRef.current?.access_token;
         if (!accessToken) return;
         setIsLoading(true);
         setError(null);
@@ -38,13 +41,14 @@ export const UserManagement: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [accessToken]);
+    }, []);
 
     useEffect(() => {
         fetchUsers();
     }, [fetchUsers]);
 
     const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {
+        const accessToken = sessionRef.current?.access_token;
         if (!accessToken) return;
         setUpdatingId(userId);
         setError(null);
@@ -70,6 +74,7 @@ export const UserManagement: React.FC = () => {
     }
     
     const handleConfirmDelete = async () => {
+        const accessToken = sessionRef.current?.access_token;
         if (!userToDelete || !accessToken) return;
         setUpdatingId(userToDelete.id);
         setError(null);

@@ -16,7 +16,6 @@ type NewPersonData = Omit<Person, 'id' | 'bio' | 'googleSheetId' | 'guardianDeta
 type NewGuardianData = Omit<NewPersonData, 'category' | 'role' | 'class' | 'guardianIds' | 'guardianDetails'>;
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
-    // FIX: Use ReturnType<typeof setTimeout> to avoid type mismatch between browser (number) and Node (Timeout object).
     let timeout: ReturnType<typeof setTimeout>;
     return (...args: Parameters<F>): Promise<ReturnType<F>> =>
         new Promise(resolve => {
@@ -50,7 +49,9 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
     const [siblingSearch, setSiblingSearch] = useState('');
     const [siblingResults, setSiblingResults] = useState<Person[]>([]);
     const [isSiblingSearching, setIsSiblingSearching] = useState(false);
-    const accessToken = session?.access_token;
+    
+    const sessionRef = useRef(session);
+    sessionRef.current = session;
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, context: 'main' | string) => {
         const file = e.target.files?.[0];
@@ -74,6 +75,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
     };
 
     const debouncedGuardianSearch = useCallback(debounce(async (term: string) => {
+        const accessToken = sessionRef.current?.access_token;
         if (term.length < 2 || !accessToken) {
             setGuardianResults([]);
             setIsGuardianSearching(false);
@@ -91,7 +93,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
         } finally {
             setIsGuardianSearching(false);
         }
-    }, 500), [accessToken]);
+    }, 500), []);
 
     const handleGuardianSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const term = e.target.value;
@@ -109,13 +111,13 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
     };
     
     const debouncedSiblingSearch = useCallback(debounce(async (term: string) => {
+        const accessToken = sessionRef.current?.access_token;
         if (term.length < 2 || !accessToken) {
             setSiblingResults([]);
             setIsSiblingSearching(false);
             return;
         }
         try {
-            // Use the main /people endpoint to find students
             const response = await fetch(`/api/people?search=${encodeURIComponent(term)}&limit=5`, {
                  headers: { 'Authorization': `Bearer ${accessToken}` }
             });
@@ -127,7 +129,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
         } finally {
             setIsSiblingSearching(false);
         }
-    }, 500), [accessToken]);
+    }, 500), []);
     
     const handleSiblingSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const term = e.target.value;
@@ -159,6 +161,7 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+        const accessToken = sessionRef.current?.access_token;
         if (!accessToken) { setError("You must be logged in to add profiles."); return; }
         if (!firstName || !lastName || !roleOrClass || !image) { setError("All fields for the primary person, including photo, are required."); return; }
         if (category === PersonCategory.STUDENT && selectedGuardians.length === 0 && newGuardians.length === 0) { setError("A student must have at least one existing or new guardian associated."); return; }

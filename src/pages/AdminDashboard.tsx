@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Settings } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
@@ -111,9 +111,12 @@ const PendingUsers: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
-    const accessToken = session?.access_token;
+    
+    const sessionRef = useRef(session);
+    sessionRef.current = session;
 
     const fetchPendingUsers = useCallback(async () => {
+        const accessToken = sessionRef.current?.access_token;
         if (!accessToken) return;
         setIsLoading(true);
         setError(null);
@@ -132,13 +135,14 @@ const PendingUsers: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [accessToken]);
+    }, []);
 
     useEffect(() => {
         fetchPendingUsers();
     }, [fetchPendingUsers]);
 
     const handleConfirmUser = async (userId: string) => {
+        const accessToken = sessionRef.current?.access_token;
         if (!accessToken) return;
         setConfirmingId(userId);
         try {
@@ -150,7 +154,6 @@ const PendingUsers: React.FC = () => {
                  const errData = await response.json();
                 throw new Error(errData.error || 'Failed to confirm user.');
             }
-            // Refresh list on success
             await fetchPendingUsers();
         } catch (err: any) {
             setError(err.message);

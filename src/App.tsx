@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
 import { IdRepository } from './components/IdRepository';
 import { AddPersonForm } from './components/AddPersonForm';
@@ -42,14 +42,18 @@ const AppContent: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const accessToken = session?.access_token;
+    const sessionRef = useRef(session);
+    sessionRef.current = session;
+    const userId = session?.user?.id;
 
     const fetchAllData = useCallback(async (page: number, search: string) => {
-        if (!accessToken) return;
+        const currentSession = sessionRef.current;
+        if (!currentSession?.access_token) return;
+        
         setIsLoading(true);
         setError(null);
         try {
-            const fetchOptions = { headers: { 'Authorization': `Bearer ${accessToken}` } };
+            const fetchOptions = { headers: { 'Authorization': `Bearer ${currentSession.access_token}` } };
             const peopleUrl = `/api/people?page=${page}&limit=${PAGE_LIMIT}&search=${encodeURIComponent(search)}`;
             
             const [peopleResponse, settingsResponse] = await Promise.all([
@@ -76,30 +80,32 @@ const AppContent: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [accessToken]);
+    }, []);
 
     useEffect(() => {
-        if (accessToken) {
+        if (userId) {
             fetchAllData(1, searchTerm);
         } else if (!authLoading) {
-            // If there's no session and we're not in an auth loading state, stop the app's loading spinner.
             setIsLoading(false);
+            setPeople([]);
+            setTotalPeople(0);
         }
-    }, [accessToken, authLoading]);
+    }, [userId, authLoading, fetchAllData]);
 
-    const handleSuccess = () => {
+    const handleSuccess = useCallback(() => {
         fetchAllData(currentPage, searchTerm);
         setView('repository');
-    };
+    }, [currentPage, searchTerm, fetchAllData]);
 
-    const handleSearchChange = (term: string) => {
+    const handleSearchChange = useCallback((term: string) => {
         setSearchTerm(term);
         fetchAllData(1, term);
-    };
+    }, [fetchAllData]);
 
-    const handlePageChange = (newPage: number) => {
+    const handlePageChange = useCallback((newPage: number) => {
         fetchAllData(newPage, searchTerm);
-    };
+    }, [searchTerm, fetchAllData]);
+
 
     if (authLoading) {
         return (
@@ -114,7 +120,6 @@ const AppContent: React.FC = () => {
     }
 
     const renderContent = () => {
-        // Show loading spinner if auth is done but we're fetching data for the first time
         if (isLoading && people.length === 0 && !error) {
             return (
                 <div className="flex items-center justify-center h-96">

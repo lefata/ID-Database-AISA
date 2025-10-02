@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Person, PersonCategory, Associate } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { CameraIcon } from './icons/CameraIcon';
@@ -13,7 +13,6 @@ interface EditPersonModalProps {
 }
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
-    // FIX: Use ReturnType<typeof setTimeout> to avoid type mismatch between browser (number) and Node (Timeout object).
     let timeout: ReturnType<typeof setTimeout>;
     return (...args: Parameters<F>): Promise<ReturnType<F>> =>
         new Promise(resolve => {
@@ -38,7 +37,9 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
   const [guardianSearch, setGuardianSearch] = useState('');
   const [guardianResults, setGuardianResults] = useState<Associate[]>([]);
   const [isGuardianSearching, setIsGuardianSearching] = useState(false);
-  const accessToken = session?.access_token;
+  
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   useEffect(() => {
     setFormData({ ...person });
@@ -70,6 +71,7 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
   };
   
   const debouncedGuardianSearch = useCallback(debounce(async (term: string) => {
+      const accessToken = sessionRef.current?.access_token;
       if (term.length < 2 || !accessToken) {
           setGuardianResults([]);
           setIsGuardianSearching(false);
@@ -87,7 +89,7 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
       } finally {
           setIsGuardianSearching(false);
       }
-  }, 500), [accessToken]);
+  }, 500), []);
 
   const handleGuardianSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const term = e.target.value;
@@ -109,6 +111,7 @@ export const EditPersonModal: React.FC<EditPersonModalProps> = ({ person, onClos
     setError(null);
     setIsSaving(true);
     
+    const accessToken = sessionRef.current?.access_token;
     if (!accessToken) { setError("Authentication session expired. Please log in again."); setIsSaving(false); return; }
 
     const updatePayload: Partial<Person> = {
