@@ -150,7 +150,13 @@ async function uploadImageToStorage(supabase: SupabaseClient, base64Data: string
     }
 
     const base64Str = base64Data.replace(/^data:image\/\w+;base64,/, '');
-    const imageBuffer = Buffer.from(base64Str, 'base64');
+    // FIX: Replaced Node.js Buffer with platform-agnostic base64 decoding to resolve type error.
+    const binaryStr = atob(base64Str);
+    const len = binaryStr.length;
+    const imageBuffer = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        imageBuffer[i] = binaryStr.charCodeAt(i);
+    }
     
     const mimeTypeMatch = base64Data.match(/data:(image\/\w+);base64,/);
     if (!mimeTypeMatch) {
