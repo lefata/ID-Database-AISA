@@ -33,7 +33,7 @@ AS $$
   SELECT COALESCE((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin', FALSE)
 $$;
 
--- 4. Apply Row Level Security (RLS) policies
+-- 4. Apply Row Level Security (RLS) policies for tables
 ALTER TABLE public.people ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow authenticated read access" ON public.people;
 CREATE POLICY "Allow authenticated read access" ON public.people FOR SELECT TO authenticated USING (TRUE);
@@ -82,6 +82,19 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.grant_first_user_admin();
+
+-- 6. Create Storage bucket policies for 'avatars'
+-- NOTE: You must manually create a PUBLIC bucket named 'avatars' in the Supabase UI first.
+-- This SQL only sets the security policies for it.
+DROP POLICY IF EXISTS "Allow authenticated uploads to avatars" ON storage.objects;
+CREATE POLICY "Allow authenticated uploads to avatars"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK ( bucket_id = 'avatars' );
+
+DROP POLICY IF EXISTS "Allow public read access to avatars" ON storage.objects;
+CREATE POLICY "Allow public read access to avatars"
+ON storage.objects FOR SELECT
+USING ( bucket_id = 'avatars' );
 `.trim();
 
 

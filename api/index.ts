@@ -163,6 +163,50 @@ app.use('/*', async (c, next) => {
   await next();
 });
 
+/**
+ * Uploads a base64 encoded image to Supabase Storage.
+ * @param supabase The Supabase client instance.
+ * @param base64Data The base64 data URL (e.g., "data:image/png;base64,...").
+ * @param personName A name to use for generating a unique file path.
+ * @returns The public URL of the uploaded image.
+ */
+async function uploadImageToStorage(supabase: SupabaseClient, base64Data: string, personName: string): Promise<string> {
+    if (!base64Data || !base64Data.startsWith('data:image')) {
+        // If it's not a new base64 upload, return the original value (it might be an existing URL).
+        return base64Data;
+    }
+
+    const base64Str = base64Data.replace(/^data:image\/\w+;base64,/, '');
+    const imageBuffer = Buffer.from(base64Str, 'base64');
+    
+    const mimeTypeMatch = base64Data.match(/data:(image\/\w+);base64,/);
+    if (!mimeTypeMatch) {
+        throw new Error('Invalid image data URL');
+    }
+    const mimeType = mimeTypeMatch[1];
+    const fileExtension = mimeType.split('/')[1] || 'png';
+
+    // Sanitize personName for file path
+    const sanitizedName = personName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+    const filePath = `avatars/${sanitizedName}-${Date.now()}.${fileExtension}`;
+
+    const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, imageBuffer, {
+            contentType: mimeType,
+            upsert: false,
+        });
+
+    if (error) {
+        console.error('Supabase storage upload error:', error);
+        throw new Error(`Failed to upload image: ${error.message}`);
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(data.path);
+    return publicUrl;
+}
+
+
 // Helper function to generate a bio
 const generateBio = async (ai: GoogleGenAI, firstName: string, lastName: string, category: PersonCategory, roleOrClass: string): Promise<string> => {
     const roleDescription = category === PersonCategory.STUDENT ? `a student in ${roleOrClass}` : `a ${roleOrClass}`;
@@ -267,7 +311,7 @@ app.post('/people', async (c) => {
             category: person.category,
             firstName: person.firstName,
             lastName: person.lastName,
-            image: person.image,
+            image: await uploadImageToStorage(supabase, person.image, `${person.firstName}-${person.lastName}`),
             role: person.role,
             class: person.class,
             bio: await generateBio(ai, person.firstName, person.lastName, person.category, person.role || 'Parent'),
@@ -301,7 +345,7 @@ app.post('/people', async (c) => {
                     category: student.category,
                     firstName: student.firstName,
                     lastName: student.lastName,
-                    image: student.image,
+                    image: await uploadImageToStorage(supabase, student.image, `${student.firstName}-${student.lastName}`),
                     class: student.class,
                     guardianIds: allGuardianIds,
                     bio: await generateBio(ai, student.firstName, student.lastName, PersonCategory.STUDENT, student.class!),
@@ -331,25 +375,19 @@ app.put('/people/:id', async (c) => {
     const id = c.req.param('id');
     const updateData = await c.req.json();
     
-    const { firstName, lastName, role, class: personClass, image, guardianIds } = updateData;
-    
-    const payload: { [key: string]: any } = {};
-    if (firstName) payload.firstName = firstName;
-    if (lastName) payload.lastName = lastName;
-    if (role) payload.role = role;
-    if (personClass) payload.class = personClass;
-    if (image) payload.image = image;
-    if (Array.isArray(guardianIds)) {
-        payload.guardianIds = guardianIds;
+    // If there's a new base64 image, upload it to storage and update the payload.
+    // The user-scoped client `supabase` is sufficient if RLS is set for storage.
+    if (updateData.image && updateData.image.startsWith('data:image')) {
+        updateData.image = await uploadImageToStorage(
+            supabase, 
+            updateData.image, 
+            `${updateData.firstName}-${updateData.lastName}`
+        );
     }
     
-    if (Object.keys(payload).length === 0) {
-        return c.json({ error: 'No update data provided' }, 400);
-    }
-
     const { error } = await supabase
         .from('people')
-        .update(payload)
+        .update(updateData)
         .eq('id', id);
 
     if (error) {

@@ -7,6 +7,7 @@ A modern web application to manage and browse ID profiles for staff, students, a
 -   **User Authentication**: Secure login system powered by Supabase Auth, with admin approval for new sign-ups.
 -   **Automated Admin Setup**: The very first user to sign up is automatically granted admin privileges.
 -   **Admin Dashboard**: A protected area for administrators to approve new users, manage their roles (admin/user), delete users, and configure application settings.
+-   **Optimized Image Handling**: Profile photos are stored in Supabase Storage for fast, efficient delivery, preventing API timeouts and improving load times.
 -   **Google Sheet Integration**: Automatically retrieves a student's unique ID from a designated Google Sheet upon profile creation, ensuring data consistency.
 -   **Categorized Profiles**: Create and manage profiles for Staff, Students, and Parents.
 -   **Dynamic Bio Generation**: Uses the Gemini API to automatically generate a professional bio for each new profile.
@@ -17,7 +18,7 @@ A modern web application to manage and browse ID profiles for staff, students, a
 
 -   **Frontend**: React, Vite, Tailwind CSS
 -   **Backend**: Hono on Vercel Serverless Functions
--   **Database & Auth**: Supabase
+-   **Database, Auth & Storage**: Supabase
 -   **AI**: Google Gemini API
 -   **Data Source**: Google Sheets API
 
@@ -83,7 +84,15 @@ Follow these steps to get the project running on your local machine.
 -   Go to **Authentication** -> **Settings**.
 -   In the **Email** section, turn **ON** the "Confirm email" toggle. This is **CRUCIAL** for the admin approval flow to work.
 
-#### Step 4.2: Create Database Schema and Security Rules
+#### Step 4.2: Create Storage Bucket for Profile Images
+
+-   In your Supabase Dashboard, go to **Storage**.
+-   Click **New bucket**.
+-   Enter `avatars` as the bucket name.
+-   Toggle **ON** the "This bucket is public" setting.
+-   Click **Create bucket**.
+
+#### Step 4.3: Create Database Schema and Security Rules
 
 > **IMPORTANT:** You must run the following SQL script in your Supabase SQL Editor. This step is required to create the necessary tables and security policies. If you encounter permission errors in the app, it's likely because this script was not run on your database.
 
@@ -122,7 +131,7 @@ Follow these steps to get the project running on your local machine.
       SELECT COALESCE((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin', FALSE)
     $$;
 
-    -- 4. Apply Row Level Security (RLS) policies
+    -- 4. Apply Row Level Security (RLS) policies for tables
     ALTER TABLE public.people ENABLE ROW LEVEL SECURITY;
     DROP POLICY IF EXISTS "Allow authenticated read access" ON public.people;
     CREATE POLICY "Allow authenticated read access" ON public.people FOR SELECT TO authenticated USING (TRUE);
@@ -170,9 +179,21 @@ Follow these steps to get the project running on your local machine.
     CREATE TRIGGER on_auth_user_created
       AFTER INSERT ON auth.users
       FOR EACH ROW EXECUTE FUNCTION public.grant_first_user_admin();
+
+    -- 6. Create Storage bucket policies for 'avatars'
+    -- This assumes you have already created a PUBLIC bucket named 'avatars' in the UI.
+    DROP POLICY IF EXISTS "Allow authenticated uploads to avatars" ON storage.objects;
+    CREATE POLICY "Allow authenticated uploads to avatars"
+    ON storage.objects FOR INSERT TO authenticated
+    WITH CHECK ( bucket_id = 'avatars' );
+
+    DROP POLICY IF EXISTS "Allow public read access to avatars" ON storage.objects;
+    CREATE POLICY "Allow public read access to avatars"
+    ON storage.objects FOR SELECT
+    USING ( bucket_id = 'avatars' );
     ```
 
-#### Step 4.3: Seed the database
+#### Step 4.4: Seed the database
 
 -   This script will check if your tables exist and seed them with initial data if they are empty.
     ```bash
