@@ -15,7 +15,8 @@
     "googleapis": "^160.0.0",
     "hono": "^4.5.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-image-crop": "^11.0.6"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
