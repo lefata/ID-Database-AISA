@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => {
       // It prioritizes the VITE_ prefixed variable, then falls back to the non-prefixed one.
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL || env.SUPABASE_URL),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY),
+      'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL),
     }
   }
 })

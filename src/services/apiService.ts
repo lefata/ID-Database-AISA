@@ -1,13 +1,16 @@
-import { Person, Settings, Associate, NewPersonData, PendingUser, ManagedUser } from './types';
+import { Person, Settings, Associate, NewPersonData, PendingUser, ManagedUser } from '../types';
 
 // --- Private Helper ---
+const API_BASE_URL = (import.meta as any).env.VITE_API_URL || '';
 
-async function fetchWithTimeout(resource: RequestInfo, options: RequestInit = {}, timeout = 15000) {
+async function fetchWithTimeout(resource: RequestInfo, options: RequestInit = {}, timeout = 30000) { // Increased timeout for Lambda
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
+    
+    const url = `${API_BASE_URL}${resource}`;
 
     try {
-        const response = await fetch(resource, {
+        const response = await fetch(url, {
             ...options,
             signal: controller.signal
         });
@@ -25,7 +28,6 @@ async function fetchWithTimeout(resource: RequestInfo, options: RequestInit = {}
             throw error;
         }
         
-        // Handle cases where the response might be empty (e.g., 204 No Content)
         if (response.status === 204) {
             return { success: true };
         }
@@ -129,5 +131,5 @@ export const runAdminDiagnostics = (token: string): Promise<any> => {
 };
 
 export const runPublicDiagnostics = (): Promise<any> => {
-    return fetchWithTimeout('/api/public/diagnostics');
+    return fetchWithTimeout('/api/public/diagnostics', {}, 30000); // Give public diagnostics more time
 };

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { handle } from 'hono/vercel';
+import { handle } from 'hono/aws-lambda';
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import type { User, SupabaseClient } from '@supabase/supabase-js';
@@ -574,4 +574,4 @@ adminApp.get('/diagnostics', async (c) => {
 
 app.route('/admin', adminApp);
 
-export default handle(app);
+export const handler = handle(app);
