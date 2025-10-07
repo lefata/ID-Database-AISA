@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { XCircleIcon } from './icons/XCircleIcon';
+import { ExclamationIcon } from './icons/ExclamationIcon';
 import { runPublicDiagnostics } from '../services/apiService';
 
 interface DiagnosticsModalProps {
@@ -9,40 +10,42 @@ interface DiagnosticsModalProps {
   onClose: () => void;
 }
 
-const ResultDisplay: React.FC<{ title: string; result: any; }> = ({ title, result }) => {
-    if (!result) return null;
-    const isSuccess = result.status === 'Success';
-    return (
-        <div className="mt-4">
-            <div className="flex items-center">
-                {isSuccess ? <CheckCircleIcon className="w-5 h-5 text-emerald-500" /> : <XCircleIcon className="w-5 h-5 text-red-500" />}
-                <span className="ml-2 font-medium text-slate-800">{title}: <span className={isSuccess ? 'text-emerald-600' : 'text-red-600'}>{result.status}</span></span>
-            </div>
-            <div className="mt-2 pl-7 text-sm">
-                {result.message && <p className="text-slate-600">{result.message}</p>}
-                {result.error && (
-                    <pre className="mt-1 p-2 bg-slate-100 rounded-md text-xs text-slate-700 overflow-x-auto">
-                        {JSON.stringify(result.error, null, 2)}
-                    </pre>
-                )}
-            </div>
-        </div>
-    );
-};
+interface LogEntry {
+  step: string;
+  command: string;
+  status: 'success' | 'failure' | 'warning';
+  details: string;
+}
 
+const StatusIcon: React.FC<{ status: LogEntry['status'] }> = ({ status }) => {
+    switch (status) {
+        case 'success':
+            return <CheckCircleIcon className="w-5 h-5 text-emerald-500 flex-shrink-0" />;
+        case 'failure':
+            return <XCircleIcon className="w-5 h-5 text-red-500 flex-shrink-0" />;
+        case 'warning':
+            return <ExclamationIcon className="w-5 h-5 text-amber-500 flex-shrink-0" />;
+        default:
+            return null;
+    }
+};
 
 export const DiagnosticsModal: React.FC<DiagnosticsModalProps> = ({ isOpen, onClose }) => {
     const [isLoading, setIsLoading] = useState(false);
-    const [results, setResults] = useState<any | null>(null);
+    const [logs, setLogs] = useState<LogEntry[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     const handleRunDiagnostics = async () => {
         setIsLoading(true);
         setError(null);
-        setResults(null);
+        setLogs([]);
         try {
             const data = await runPublicDiagnostics();
-            setResults(data);
+            if (data.logs && Array.isArray(data.logs)) {
+                setLogs(data.logs);
+            } else {
+                throw new Error("Invalid response format from diagnostics API. Expected a 'logs' array.");
+            }
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -54,29 +57,42 @@ export const DiagnosticsModal: React.FC<DiagnosticsModalProps> = ({ isOpen, onCl
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale">
                 <div className="p-6 border-b">
                     <h3 className="text-xl leading-6 font-bold text-slate-900" id="modal-title">Connection Diagnostics</h3>
                      <p className="mt-1 text-sm text-slate-500">
-                        Check the status of the connection to the application services.
+                        Check the status of the connection to the application services and verify database schema.
                     </p>
                 </div>
-                <div className="p-6">
-                    {!results && !isLoading && !error && (
-                        <div className="text-center">
-                            <p className="text-slate-600">Click the button below to check the system status.</p>
+                <div className="p-6 max-h-[60vh] overflow-y-auto">
+                    {!logs.length && !isLoading && !error && (
+                        <div className="text-center py-8">
+                            <p className="text-slate-600">Click "Run Diagnostics" to check the system status.</p>
                         </div>
                     )}
                     {isLoading && (
-                         <div className="flex justify-center items-center py-8">
+                         <div className="flex flex-col justify-center items-center py-8 space-y-3">
                             <SpinnerIcon className="w-8 h-8 text-sky-600" />
+                            <p className="text-slate-600">Running diagnostics...</p>
                         </div>
                     )}
-                    {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-                    {results && (
-                         <div className="border-t pt-4">
-                            <ResultDisplay title="API Server Status" result={results.apiStatus} />
-                            <ResultDisplay title="Supabase Connection" result={results.supabaseConnection} />
+                    {error && <p className="text-sm text-red-600 text-center py-8">{error}</p>}
+                    {logs.length > 0 && (
+                         <div className="space-y-4">
+                            {logs.map((log, index) => (
+                                <div key={index} className="flex items-start space-x-3">
+                                    <StatusIcon status={log.status} />
+                                    <div className="flex-1">
+                                        <p className="font-semibold text-slate-800 text-sm">{log.step}</p>
+                                        <code className="mt-1 text-xs bg-slate-100 p-2 rounded-md block font-mono text-slate-700 break-all">
+                                            {log.command}
+                                        </code>
+                                        <p className="mt-2 text-sm text-slate-600">
+                                            {log.details}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>
