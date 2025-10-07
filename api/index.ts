@@ -1,8 +1,14 @@
 import { Hono } from 'hono';
-import { handle } from 'hono/aws-lambda';
+import { handle } from 'hono/vercel';
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
-import { createClient } from '@supabase/supabase-js';
-import type { User, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+// FIX: In older Supabase v2 versions, auth types were not exported from the main package.
+// Importing 'User' from '@supabase/gotrue-js' provides the correct type definitions.
+import type { User } from '@supabase/gotrue-js';
+
+export const config = {
+  runtime: 'edge',
+};
 
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   return new Promise((resolve, reject) => {
@@ -574,4 +580,4 @@ adminApp.get('/diagnostics', async (c) => {
 
 app.route('/admin', adminApp);
 
-export const handler = handle(app);
+export default handle(app);

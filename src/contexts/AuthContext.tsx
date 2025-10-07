@@ -1,6 +1,8 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import type { Session, User } from '@supabase/supabase-js';
+// FIX: In older Supabase v2 versions, auth types were not exported from the main package.
+// Importing from '@supabase/gotrue-js' provides the correct type definitions.
+import type { Session, User } from '@supabase/gotrue-js';
 
 interface AuthContextType {
   session: Session | null;
