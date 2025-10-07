@@ -124,11 +124,15 @@ export const deleteUser = (token: string, userId: string): Promise<{ success: bo
     });
 };
 
-// --- Diagnostics API ---
-
-export const runAdminDiagnostics = (token: string): Promise<any> => {
-    return fetchWithTimeout('/api/admin/diagnostics', { headers: { 'Authorization': `Bearer ${token}` } });
+export const runDbVerifyAndRepair = (token: string): Promise<any> => {
+    return fetchWithTimeout('/api/admin/db-verify-repair', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+    }, 60000); // 60 second timeout for this potentially long-running task
 };
+
+
+// --- Diagnostics API ---
 
 export const runPublicDiagnostics = (): Promise<any> => {
     return fetchWithTimeout('/api/public/diagnostics', {}, 30000); // Give public diagnostics more time

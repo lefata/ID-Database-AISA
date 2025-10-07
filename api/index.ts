@@ -440,14 +440,15 @@ adminApp.use('/*', async (c, next) => {
 adminApp.get('/pending-users', async (c) => {
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
-        // FIX: Avoid destructuring to help TypeScript with control flow analysis on discriminated union types.
-        const userListResponse = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        // FIX: Do not destructure the supabase response. Keeping it as a single object
+        // allows TypeScript to correctly narrow types for discriminated unions.
+        const response = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
 
-        if (userListResponse.error) {
-            return c.json({ error: 'Failed to list users', details: userListResponse.error.message }, 500);
+        if (response.error) {
+            return c.json({ error: 'Failed to list users', details: response.error.message }, 500);
         }
 
-        const pendingUsers = userListResponse.data.users
+        const pendingUsers = response.data.users
             .filter((user) => !user.email_confirmed_at)
             .map(user => ({
                 id: user.id,
@@ -545,36 +546,42 @@ adminApp.delete('/users/:id', async (c) => {
     }
 });
 
-adminApp.get('/diagnostics', async (c) => {
-    const supabase = c.get('supabase');
-    let results: any = {};
+adminApp.post('/db-verify-repair', async (c) => {
+    let logs: any[] = [];
+    try {
+        const { supabaseAdmin } = await import('./supabaseAdminClient');
+        
+        // 1. Check and create storage bucket
+        logs.push({ status: 'info', step: 'Check Storage Bucket: avatars', details: 'Verifying existence of "avatars" storage bucket.' });
+        const { error: getError } = await supabaseAdmin.storage.getBucket('avatars');
+        if (getError && getError.message.includes('Bucket not found')) {
+            const { error: createError } = await supabaseAdmin.storage.createBucket('avatars', { public: true });
+            if (createError) {
+                logs.push({ status: 'failure', step: 'Create Storage Bucket: avatars', details: `Failed to create bucket: ${createError.message}` });
+            } else {
+                logs.push({ status: 'success', step: 'Create Storage Bucket: avatars', details: 'Bucket "avatars" did not exist and was created successfully.' });
+            }
+        } else if (getError) {
+            logs.push({ status: 'failure', step: 'Check Storage Bucket: avatars', details: `Error checking bucket: ${getError.message}` });
+        } else {
+            logs.push({ status: 'info', step: 'Check Storage Bucket: avatars', details: 'Bucket "avatars" already exists.' });
+        }
 
-    // 1. Check Supabase connection by fetching a simple record
-    const { error: dbError } = await supabase.from('settings').select('key').limit(1);
-    if (dbError) {
-        results.supabaseConnection = { status: 'Failed', error: dbError };
-        // Don't return early, try other checks
-    } else {
-        results.supabaseConnection = { status: 'Success', message: 'Successfully connected to Supabase.' };
+        // 2. Call the database function to verify and repair schema
+        logs.push({ status: 'info', step: 'Verify & Repair Schema', details: 'Calling database function to check tables, functions, and policies.' });
+        const { data: schemaLogs, error: rpcError } = await supabaseAdmin.rpc('verify_and_repair_schema');
+        if (rpcError) {
+             logs.push({ status: 'failure', step: 'Verify & Repair Schema', details: `RPC call failed: ${rpcError.message}` });
+        } else {
+            logs = [...logs, ...schemaLogs];
+        }
+        
+        return c.json({ logs });
+    } catch (e: any) {
+        logs.push({ status: 'failure', step: 'Overall Process', details: `An unexpected error occurred: ${e.message}` });
+        return c.json({ logs }, 500);
     }
-    
-    // 2. Fetch all settings
-    const { data: settingsData, error: settingsError } = await supabase.from('settings').select('key, value');
-    results.settingsFetch = {
-        status: settingsError ? 'Failed' : 'Success',
-        data: settingsError ? settingsError : settingsData,
-    };
-    
-    // 3. Fetch a sample profile
-    const { data: profileData, error: profileError } = await supabase.from('people').select('*').limit(1);
-    results.sampleProfileFetch = {
-        status: profileError ? 'Failed' : 'Success',
-        data: profileError ? profileError : profileData,
-    };
-
-    return c.json(results);
 });
-
 
 app.route('/admin', adminApp);
 

@@ -5,82 +5,86 @@ import { useAuth } from '../contexts/AuthContext';
 import { UserManagement } from '../components/UserManagement';
 import { CheckCircleIcon } from '../components/icons/CheckCircleIcon';
 import { XCircleIcon } from '../components/icons/XCircleIcon';
-import { updateSetting, runAdminDiagnostics, getPendingUsers, confirmUser } from '../services/apiService';
+import { InformationCircleIcon } from '../components/icons/InformationCircleIcon';
+import { updateSetting, getPendingUsers, confirmUser, runDbVerifyAndRepair } from '../services/apiService';
 
 interface AdminDashboardProps {
     settings: Settings;
     onSettingsUpdate: () => void;
 }
 
-const DiagnosticsTool: React.FC = () => {
+interface LogEntry {
+  status: 'success' | 'failure' | 'info';
+  step: string;
+  details: string;
+}
+
+const DatabaseHealthTool: React.FC = () => {
     const { session } = useAuth();
-    const [isDiagnosing, setIsDiagnosing] = useState(false);
-    const [results, setResults] = useState<any | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [logs, setLogs] = useState<LogEntry[] | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const handleRunDiagnostics = async () => {
-        setIsDiagnosing(true);
+    const handleRun = async () => {
+        setIsProcessing(true);
         setError(null);
-        setResults(null);
+        setLogs(null);
         if (!session?.access_token) {
             setError("Authentication session has expired. Please log in again.");
-            setIsDiagnosing(false);
+            setIsProcessing(false);
             return;
         }
 
         try {
-            const data = await runAdminDiagnostics(session.access_token);
-            setResults(data);
+            const data = await runDbVerifyAndRepair(session.access_token);
+            if (data.logs && Array.isArray(data.logs)) {
+                setLogs(data.logs);
+            } else {
+                throw new Error("Invalid response format from diagnostics API.");
+            }
         } catch (err: any) {
             setError(err.message);
         } finally {
-            setIsDiagnosing(false);
+            setIsProcessing(false);
         }
     };
 
-    const ResultDisplay: React.FC<{ title: string; result: any; }> = ({ title, result }) => {
-        if (!result) return null;
-        const isSuccess = result.status === 'Success';
-        return (
-            <div className="mt-4">
-                <div className="flex items-center">
-                    {isSuccess ? <CheckCircleIcon className="w-5 h-5 text-emerald-500" /> : <XCircleIcon className="w-5 h-5 text-red-500" />}
-                    <span className="ml-2 font-medium text-slate-800">{title}: <span className={isSuccess ? 'text-emerald-600' : 'text-red-600'}>{result.status}</span></span>
-                </div>
-                <div className="mt-2 pl-7 text-sm">
-                    {result.message && <p className="text-slate-600">{result.message}</p>}
-                    {(result.data || result.error) && (
-                        <pre className="mt-1 p-2 bg-slate-100 rounded-md text-xs text-slate-700 overflow-x-auto">
-                            {JSON.stringify(result.data || result.error, null, 2)}
-                        </pre>
-                    )}
-                </div>
-            </div>
-        );
+    const StatusIcon: React.FC<{ status: LogEntry['status'] }> = ({ status }) => {
+        switch (status) {
+            case 'success': return <CheckCircleIcon className="w-5 h-5 text-emerald-500 flex-shrink-0" />;
+            case 'failure': return <XCircleIcon className="w-5 h-5 text-red-500 flex-shrink-0" />;
+            case 'info': return <InformationCircleIcon className="w-5 h-5 text-sky-500 flex-shrink-0" />;
+            default: return null;
+        }
     };
 
     return (
         <div className="p-6 mt-8 bg-white rounded-lg shadow-md">
-            <h3 className="text-lg font-medium leading-6 text-slate-900">Diagnostics</h3>
+            <h3 className="text-lg font-medium leading-6 text-slate-900">Database Health</h3>
             <p className="mt-1 text-sm text-slate-500">
-                Run system checks to verify API, database, and data integrity.
+                Verify and repair the database schema, tables, functions, and storage buckets. This is safe to run multiple times.
             </p>
             <div className="mt-4">
                 <button
-                    onClick={handleRunDiagnostics}
-                    disabled={isDiagnosing}
-                    className="px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:bg-sky-300 flex items-center justify-center w-40"
+                    onClick={handleRun}
+                    disabled={isProcessing}
+                    className="px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:bg-sky-300 flex items-center justify-center w-48"
                 >
-                    {isDiagnosing ? <SpinnerIcon /> : 'Run Diagnostics'}
+                    {isProcessing ? <SpinnerIcon /> : 'Verify & Repair Database'}
                 </button>
             </div>
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-            {results && (
-                <div className="mt-6 border-t pt-4">
-                    <ResultDisplay title="API Health Check" result={{ status: 'Success', message: 'API endpoint is responsive.'}} />
-                    <ResultDisplay title="Supabase Connection" result={results.supabaseConnection} />
-                    <ResultDisplay title="Settings Fetch" result={results.settingsFetch} />
-                    <ResultDisplay title="Sample Profile Fetch" result={results.sampleProfileFetch} />
+            {logs && (
+                <div className="mt-6 border-t pt-4 space-y-3">
+                    {logs.map((log, index) => (
+                        <div key={index} className="flex items-start space-x-3">
+                            <StatusIcon status={log.status} />
+                            <div>
+                                <p className="font-semibold text-slate-800 text-sm">{log.step}</p>
+                                <p className="text-sm text-slate-600">{log.details}</p>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
@@ -259,7 +263,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
                     </form>
                 </div>
                 
-                <DiagnosticsTool />
+                <DatabaseHealthTool />
 
                 <PendingUsers />
 
