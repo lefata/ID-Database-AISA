@@ -23,7 +23,8 @@ async function fetchWithTimeout(resource: RequestInfo, options: RequestInit = {}
             } catch (e) {
                 errorBody = { error: response.statusText || `Request failed with status ${response.status}` };
             }
-            const error = new Error(errorBody.error || `Request failed with status ${response.status}`);
+            const message = errorBody.details ? `${errorBody.error} (${errorBody.details})` : errorBody.error;
+            const error = new Error(message || `Request failed with status ${response.status}`);
             (error as any).status = response.status;
             throw error;
         }

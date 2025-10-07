@@ -6,6 +6,7 @@ import { SpinnerIcon } from '../components/icons/SpinnerIcon';
 import { SearchIcon } from '../components/icons/SearchIcon';
 import { ArrowRightIcon } from '../components/icons/ArrowRightIcon';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
+import { XCircleIcon } from '../components/icons/XCircleIcon';
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
     let timeout: ReturnType<typeof setTimeout>;
@@ -84,8 +85,12 @@ export const AccessControl: React.FC = () => {
             setSuccessLog({ personId, direction });
             setTimeout(() => setSuccessLog(null), 2000);
             await fetchRecentLogs(); // Refresh recent logs
-        } catch (err) {
-            setError(`Failed to log ${direction}.`);
+        } catch (err: any) {
+            if (err.message && (err.message.includes("Could not find the table") || err.message.includes("does not exist")) && err.message.toLowerCase().includes("access_logs")) {
+                setError(`Database Error: The access log table is missing. An administrator must go to the Admin Dashboard and run the "Verify & Repair Database" tool.`);
+            } else {
+                setError(`Failed to log ${direction}: ${err.message}`);
+            }
         } finally {
             setIsLogging(null);
         }
@@ -117,6 +122,19 @@ export const AccessControl: React.FC = () => {
                     <h2 className="text-3xl font-bold text-slate-800">Access Control</h2>
                     <p className="mt-1 text-slate-500">Log campus entries and exits. Search for a person to begin.</p>
                 </div>
+
+                {error && (
+                    <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4 rounded-r-md">
+                        <div className="flex">
+                            <div className="flex-shrink-0">
+                                <XCircleIcon className="h-5 w-5 text-red-400" />
+                            </div>
+                            <div className="ml-3">
+                                <p className="text-sm text-red-700">{error}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2">
