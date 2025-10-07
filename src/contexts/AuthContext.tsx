@@ -6,6 +6,7 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   isAdmin: boolean;
+  isSecurity: boolean;
   loading: boolean;
   logout: () => Promise<void>;
 }
@@ -16,6 +17,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSecurity, setIsSecurity] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,11 +28,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSession(null);
         setUser(null);
         setIsAdmin(false);
+        setIsSecurity(false);
       } else {
         setSession(session);
         const currentUser = session?.user ?? null;
         setUser(currentUser);
-        setIsAdmin(currentUser?.user_metadata?.role === 'admin');
+        const userRole = currentUser?.user_metadata?.role;
+        setIsAdmin(userRole === 'admin');
+        setIsSecurity(userRole === 'security');
       }
       setLoading(false);
     };
@@ -53,6 +58,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     session,
     user,
     isAdmin,
+    isSecurity,
     loading,
     logout,
   };

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
+import { MiddlewareHandler } from 'hono';
 
 export const config = {
   runtime: 'edge',
@@ -117,7 +118,7 @@ type NewPersonData = {
   tempId: string;
   category: PersonCategory;
   firstName: string;
-  lastName: string;
+  lastName:string;
   image: string;
   role?: string;
   class?: string;
@@ -134,12 +135,12 @@ type AppContext = {
 
 const app = new Hono<AppContext>().basePath('/api');
 
+// --- MIDDLEWARE ---
 app.use('/*', async (c, next) => {
   const authHeader = c.req.header('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
-
   const supabase = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_ANON_KEY!,
@@ -148,7 +149,6 @@ app.use('/*', async (c, next) => {
       auth: { autoRefreshToken: false, persistSession: false },
     }
   );
-  
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     return c.json({ error: 'Invalid token' }, 401);
@@ -158,11 +158,29 @@ app.use('/*', async (c, next) => {
   await next();
 });
 
+const adminOnly: MiddlewareHandler<AppContext> = async (c, next) => {
+    const user = c.get('user');
+    if (user.user_metadata?.role !== 'admin') {
+        return c.json({ error: 'Forbidden: Admins only' }, 403);
+    }
+    await next();
+};
+
+const adminOrSecurity: MiddlewareHandler<AppContext> = async (c, next) => {
+    const user = c.get('user');
+    const role = user.user_metadata?.role;
+    if (role !== 'admin' && role !== 'security') {
+        return c.json({ error: 'Forbidden: Admin or Security role required' }, 403);
+    }
+    await next();
+};
+
+
+// --- HELPERS ---
 async function uploadImageToStorage(supabase: SupabaseClient, base64Data: string, personName: string): Promise<string> {
     if (!base64Data || !base64Data.startsWith('data:image')) {
         return base64Data;
     }
-
     const base64Str = base64Data.replace(/^data:image\/\w+;base64,/, '');
     const binaryStr = atob(base64Str);
     const len = binaryStr.length;
@@ -170,29 +188,17 @@ async function uploadImageToStorage(supabase: SupabaseClient, base64Data: string
     for (let i = 0; i < len; i++) {
         imageBuffer[i] = binaryStr.charCodeAt(i);
     }
-    
     const mimeTypeMatch = base64Data.match(/data:(image\/\w+);base64,/);
-    if (!mimeTypeMatch) {
-        throw new Error('Invalid image data URL');
-    }
+    if (!mimeTypeMatch) throw new Error('Invalid image data URL');
     const mimeType = mimeTypeMatch[1];
     const fileExtension = mimeType.split('/')[1] || 'png';
-
     const sanitizedName = personName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
     const filePath = `avatars/${sanitizedName}-${Date.now()}.${fileExtension}`;
-
-    const { data, error } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, imageBuffer, {
-            contentType: mimeType,
-            upsert: false,
-        });
-
+    const { data, error } = await supabase.storage.from('avatars').upload(filePath, imageBuffer, { contentType: mimeType, upsert: false });
     if (error) {
         console.error('Supabase storage upload error:', error);
         throw new Error(`Failed to upload image: ${error.message}`);
     }
-
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(data.path);
     return publicUrl;
 }
@@ -214,6 +220,8 @@ const generateBio = async (ai: GoogleGenAI, firstName: string, lastName: string,
     }
 };
 
+
+// --- ROUTES ---
 app.get('/settings', async (c) => {
     const supabase = c.get('supabase');
     const { data, error } = await supabase.from('settings').select('key, value');
@@ -225,28 +233,19 @@ app.get('/settings', async (c) => {
         return c.json({});
     }
     const settings = data.reduce((acc, row) => {
-        if (row && row.key) {
-            acc[row.key] = row.value;
-        }
+        if (row && row.key) acc[row.key] = row.value;
         return acc;
     }, {} as { [key: string]: string });
     return c.json(settings);
 });
 
-app.put('/settings', async (c) => {
-    const user = c.get('user');
+app.put('/settings', adminOnly, async (c) => {
     const supabase = c.get('supabase');
-    if (user.user_metadata?.role !== 'admin') {
-        return c.json({ error: 'Forbidden: Admins only' }, 403);
-    }
-    
     const { key, value } = await c.req.json();
     if (!key || value === undefined) {
         return c.json({ error: 'Key and value are required' }, 400);
     }
-
     const { error } = await supabase.from('settings').upsert({ key, value });
-
     if (error) {
         console.error('Supabase settings update error:', error);
         return c.json({ error: 'Failed to update setting.', details: error.message, code: error.code }, 500);
@@ -312,22 +311,12 @@ app.get('/people', async (c) => {
 app.get('/associates', async (c) => {
     const supabase = c.get('supabase');
     const search = c.req.query('search') || '';
-
-    if (!search || search.length < 2) {
-        return c.json([]);
-    }
-
-    let query = supabase
-        .from('people')
-        .select('id, firstName, lastName')
-        .in('category', [PersonCategory.STAFF, PersonCategory.PARENT]);
-    
+    if (!search || search.length < 2) return c.json([]);
+    let query = supabase.from('people').select('id, firstName, lastName').in('category', [PersonCategory.STAFF, PersonCategory.PARENT]);
     const searchWords = search.trim().split(' ').filter(w => w.length > 0);
     const orConditions = searchWords.map(word => `firstName.ilike.%${word}%,lastName.ilike.%${word}%`).join(',');
     query = query.or(orConditions);
-    
     const { data, error } = await query.limit(10);
-
     if (error) {
         console.error('Supabase fetch associates error:', error);
         return c.json({ error: `Failed to fetch associates: ${error.message}` }, 500);
@@ -416,69 +405,87 @@ app.post('/people', async (c) => {
   }
 });
 
-app.put('/people/:id', async (c) => {
-    const user = c.get('user');
+app.put('/people/:id', adminOnly, async (c) => {
     const supabase = c.get('supabase');
-    if (user.user_metadata?.role !== 'admin') {
-        return c.json({ error: 'Forbidden: Admins only' }, 403);
-    }
-
     const id = c.req.param('id');
     const updateData = await c.req.json();
-    
     if (updateData.image && updateData.image.startsWith('data:image')) {
-        updateData.image = await uploadImageToStorage(
-            supabase, 
-            updateData.image, 
-            `${updateData.firstName}-${updateData.lastName}`
-        );
+        updateData.image = await uploadImageToStorage(supabase, updateData.image, `${updateData.firstName}-${updateData.lastName}`);
     }
-    
-    const { error } = await supabase
-        .from('people')
-        .update(updateData)
-        .eq('id', id);
-
+    const { error } = await supabase.from('people').update(updateData).eq('id', id);
     if (error) {
         console.error('Supabase update error:', error);
         return c.json({ error: 'Failed to update person', details: error.message }, 500);
     }
-
     return c.json({ success: true });
 });
 
-const adminApp = new Hono<AppContext>();
-
-adminApp.use('/*', async (c, next) => {
+// --- ACCESS LOGS ROUTES ---
+app.post('/logs', adminOrSecurity, async (c) => {
+    const supabase = c.get('supabase');
     const user = c.get('user');
-    if (user.user_metadata?.role !== 'admin') {
-        return c.json({ error: 'Forbidden: Admins only' }, 403);
+    const { personId, direction } = await c.req.json();
+    if (!personId || !['entry', 'exit'].includes(direction)) {
+        return c.json({ error: 'Invalid payload: personId and direction are required.' }, 400);
     }
-    await next();
+    const { error } = await supabase.from('access_logs').insert({
+        person_id: personId,
+        direction,
+        recorded_by: user.id,
+    });
+    if (error) {
+        console.error('Error creating access log:', error);
+        return c.json({ error: 'Failed to create access log.', details: error.message }, 500);
+    }
+    return c.json({ success: true }, 201);
 });
+
+app.get('/logs', adminOrSecurity, async (c) => {
+    const supabase = c.get('supabase');
+    const limit = parseInt(c.req.query('limit') || '20');
+    const { data, error } = await supabase
+        .from('access_logs')
+        .select('*, person:people(firstName, lastName, image), recorder:users(email)')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+    if (error) {
+        console.error('Error fetching recent logs:', error);
+        return c.json({ error: 'Failed to fetch recent logs.', details: error.message }, 500);
+    }
+    return c.json(data);
+});
+
+app.get('/people/:id/logs', adminOrSecurity, async (c) => {
+    const supabase = c.get('supabase');
+    const personId = c.req.param('id');
+    const { data, error } = await supabase
+        .from('access_logs')
+        .select('*, recorder:users(email)')
+        .eq('person_id', personId)
+        .order('created_at', { ascending: false });
+    if (error) {
+        console.error(`Error fetching logs for person ${personId}:`, error);
+        return c.json({ error: 'Failed to fetch access logs.', details: error.message }, 500);
+    }
+    return c.json(data);
+});
+
+// --- ADMIN ROUTES ---
+const adminApp = new Hono<AppContext>();
+adminApp.use('/*', adminOnly);
 
 adminApp.get('/pending-users', async (c) => {
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
-        // FIX: Avoided nested destructuring which can cause issues with discriminated unions.
-        // This helps TypeScript correctly infer the type of `user` in the filter method.
         const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-
-        if (error) {
-            return c.json({ error: 'Failed to list users', details: error.message }, 500);
-        }
-
-        const pendingUsers = data.users
-            .filter((user) => !user.email_confirmed_at)
-            .map(user => ({
-                id: user.id,
-                email: user.email,
-                created_at: user.created_at,
-            }));
-            
+        if (error) throw error;
+        // FIX: Cast `user` to `any` to bypass a potential type definition issue where `email_confirmed_at` might be missing from the User type returned by `listUsers`, causing a type inference problem.
+        const pendingUsers = data.users.filter((user: any) => !user.email_confirmed_at).map((user: any) => ({
+            id: user.id, email: user.email, created_at: user.created_at,
+        }));
         return c.json(pendingUsers);
     } catch (e: any) {
-        return c.json({ error: 'Admin client failed to load. Check server configuration.', details: e.message }, 500);
+        return c.json({ error: 'Admin client failed or failed to list users.', details: e.message }, 500);
     }
 });
 
@@ -486,15 +493,11 @@ adminApp.post('/users/:id/confirm', async (c) => {
     const userId = c.req.param('id');
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
-        const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-            email_confirm: true,
-        });
-        if (error) {
-            return c.json({ error: 'Failed to confirm user', details: error.message }, 500);
-        }
+        const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, { email_confirm: true });
+        if (error) throw error;
         return c.json({ success: true, user: data.user });
     } catch (e: any) {
-        return c.json({ error: 'Admin client failed to load. Check server configuration.', details: e.message }, 500);
+        return c.json({ error: 'Admin client failed or failed to confirm user.', details: e.message }, 500);
     }
 });
 
@@ -502,64 +505,46 @@ adminApp.get('/users', async (c) => {
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
         const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-
-        if (error) {
-            return c.json({ error: 'Failed to list users', details: error.message }, 500);
-        }
-        
+        if (error) throw error;
         const managedUsers = data.users.map(user => ({
-            id: user.id,
-            email: user.email,
-            role: user.user_metadata?.role || 'user',
+            id: user.id, email: user.email, role: user.user_metadata?.role || 'user',
         }));
-
         return c.json(managedUsers);
     } catch (e: any) {
-        return c.json({ error: 'Admin client failed to load', details: e.message }, 500);
+        return c.json({ error: 'Admin client failed or failed to list users.', details: e.message }, 500);
     }
 });
 
 adminApp.put('/users/:id/role', async (c) => {
     const userId = c.req.param('id');
     const { role } = await c.req.json();
-
-    if (role !== 'admin' && role !== 'user') {
+    if (!['admin', 'user', 'security'].includes(role)) {
         return c.json({ error: 'Invalid role specified' }, 400);
     }
-
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
-        const { data: userToUpdate, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(userId);
+        const { data: { user: userToUpdate }, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(userId);
         if (fetchError) throw fetchError;
-        
         const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-            user_metadata: { ...userToUpdate.user.user_metadata, role },
+            user_metadata: { ...userToUpdate.user_metadata, role },
         });
-
-        if (error) {
-            return c.json({ error: 'Failed to update user role', details: error.message }, 500);
-        }
-
+        if (error) throw error;
         return c.json({ success: true, user: data.user });
     } catch (e: any) {
-        return c.json({ error: 'Admin client failed to load or update failed', details: e.message }, 500);
+        return c.json({ error: 'Admin client failed or update failed', details: e.message }, 500);
     }
 });
 
 adminApp.delete('/users/:id', async (c) => {
     const userId = c.req.param('id');
     const currentUser = c.get('user');
-
     if (userId === currentUser.id) {
         return c.json({ error: "Admins cannot delete their own account." }, 400);
     }
-    
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
         const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-        if (error) {
-            throw error;
-        }
+        if (error) throw error;
         return c.json({ success: true });
     } catch (e: any) {
         return c.json({ error: 'Failed to delete user', details: e.message }, 500);
@@ -570,31 +555,19 @@ adminApp.post('/db-verify-repair', async (c) => {
     let logs: any[] = [];
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
-        
-        // 1. Check and create storage bucket
         logs.push({ status: 'info', step: 'Check Storage Bucket: avatars', details: 'Verifying existence of "avatars" storage bucket.' });
         const { error: getError } = await supabaseAdmin.storage.getBucket('avatars');
         if (getError && getError.message.includes('Bucket not found')) {
             const { error: createError } = await supabaseAdmin.storage.createBucket('avatars', { public: true });
-            if (createError) {
-                logs.push({ status: 'failure', step: 'Create Storage Bucket: avatars', details: `Failed to create bucket: ${createError.message}` });
-            } else {
-                logs.push({ status: 'success', step: 'Create Storage Bucket: avatars', details: 'Bucket "avatars" did not exist and was created successfully.' });
-            }
-        } else if (getError) {
-            logs.push({ status: 'failure', step: 'Check Storage Bucket: avatars', details: `Error checking bucket: ${getError.message}` });
-        } else {
-            logs.push({ status: 'info', step: 'Check Storage Bucket: avatars', details: 'Bucket "avatars" already exists.' });
-        }
+            if (createError) logs.push({ status: 'failure', step: 'Create Storage Bucket: avatars', details: `Failed to create bucket: ${createError.message}` });
+            else logs.push({ status: 'success', step: 'Create Storage Bucket: avatars', details: 'Bucket "avatars" did not exist and was created successfully.' });
+        } else if (getError) logs.push({ status: 'failure', step: 'Check Storage Bucket: avatars', details: `Error checking bucket: ${getError.message}` });
+        else logs.push({ status: 'info', step: 'Check Storage Bucket: avatars', details: 'Bucket "avatars" already exists.' });
 
-        // 2. Call the database function to verify and repair schema
         logs.push({ status: 'info', step: 'Verify & Repair Schema', details: 'Calling database function to check tables, functions, and policies.' });
         const { data: schemaLogs, error: rpcError } = await supabaseAdmin.rpc('verify_and_repair_schema');
-        if (rpcError) {
-             logs.push({ status: 'failure', step: 'Verify & Repair Schema', details: `RPC call failed: ${rpcError.message}` });
-        } else {
-            logs = [...logs, ...schemaLogs];
-        }
+        if (rpcError) logs.push({ status: 'failure', step: 'Verify & Repair Schema', details: `RPC call failed: ${rpcError.message}` });
+        else logs = [...logs, ...schemaLogs];
         
         return c.json({ logs });
     } catch (e: any) {

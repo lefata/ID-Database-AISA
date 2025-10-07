@@ -1,4 +1,4 @@
-import { Person, Settings, Associate, NewPersonData, PendingUser, ManagedUser } from '../types';
+import { Person, Settings, Associate, NewPersonData, PendingUser, ManagedUser, AccessLog, PersonAccessLog, UserRole } from '../types';
 
 // --- Private Helper ---
 const API_BASE_URL = (import.meta as any).env.VITE_API_URL || '';
@@ -92,6 +92,25 @@ export const updateSetting = (token: string, key: string, value: string): Promis
     });
 };
 
+// --- Access Logs API ---
+
+export const logAccess = (token: string, personId: number, direction: 'entry' | 'exit'): Promise<{ success: boolean }> => {
+    return fetchWithTimeout('/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ personId, direction }),
+    });
+};
+
+export const getRecentLogs = (token: string): Promise<AccessLog[]> => {
+    return fetchWithTimeout('/api/logs', { headers: { 'Authorization': `Bearer ${token}` } });
+};
+
+export const getPersonLogs = (token: string, personId: number): Promise<PersonAccessLog[]> => {
+    return fetchWithTimeout(`/api/people/${personId}/logs`, { headers: { 'Authorization': `Bearer ${token}` } });
+};
+
+
 // --- Admin API ---
 
 export const getPendingUsers = (token: string): Promise<PendingUser[]> => {
@@ -109,7 +128,7 @@ export const getUsers = (token: string): Promise<ManagedUser[]> => {
     return fetchWithTimeout('/api/admin/users', { headers: { 'Authorization': `Bearer ${token}` } });
 };
 
-export const updateUserRole = (token: string, userId: string, newRole: 'admin' | 'user'): Promise<{ success: boolean }> => {
+export const updateUserRole = (token: string, userId: string, newRole: UserRole): Promise<{ success: boolean }> => {
     return fetchWithTimeout(`/api/admin/users/${userId}/role`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

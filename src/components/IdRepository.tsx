@@ -5,6 +5,7 @@ import { SearchIcon } from './icons/SearchIcon';
 import { UserIcon } from './icons/UserIcon';
 import { EditPersonModal } from './EditPersonModal';
 import { SpinnerIcon } from './icons/SpinnerIcon';
+import { PersonDetailModal } from './PersonDetailModal';
 
 const PAGE_LIMIT = 21;
 
@@ -31,13 +32,20 @@ export const IdRepository: React.FC<IdRepositoryProps> = ({
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [editingPerson, setEditingPerson] = useState<Person | null>(null);
+    const [viewingPerson, setViewingPerson] = useState<Person | null>(null);
     const searchTimeout = useRef<number | null>(null);
 
     const googleSheetId = settings.googleSheetId || '';
     
     const handleEditSuccess = () => {
         setEditingPerson(null);
+        setViewingPerson(null);
         onSuccess();
+    };
+    
+    const handleStartEdit = (person: Person) => {
+        setViewingPerson(null);
+        setEditingPerson(person);
     };
 
     const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,7 +104,7 @@ export const IdRepository: React.FC<IdRepositoryProps> = ({
                                       key={person.id}
                                       person={person}
                                       googleSheetId={googleSheetId}
-                                      onEdit={setEditingPerson}
+                                      onClick={() => setViewingPerson(person)}
                                     />
                                 ))}
                             </div>
@@ -138,6 +146,13 @@ export const IdRepository: React.FC<IdRepositoryProps> = ({
                     )}
                 </div>
             </div>
+             {viewingPerson && (
+                <PersonDetailModal
+                    person={viewingPerson}
+                    onClose={() => setViewingPerson(null)}
+                    onEdit={handleStartEdit}
+                />
+            )}
             {editingPerson && (
                 <EditPersonModal
                     person={editingPerson}

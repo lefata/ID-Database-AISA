@@ -4,7 +4,7 @@ import { SpinnerIcon } from './icons/SpinnerIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { getUsers, updateUserRole, deleteUser } from '../services/apiService';
-import { ManagedUser } from '../types';
+import { ManagedUser, UserRole } from '../types';
 
 export const UserManagement: React.FC = () => {
     const { session, user: currentUser } = useAuth();
@@ -36,14 +36,16 @@ export const UserManagement: React.FC = () => {
         fetchUsers();
     }, [fetchUsers]);
 
-    const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {
+    const handleRoleChange = async (userId: string, newRole: UserRole) => {
         const accessToken = sessionRef.current?.access_token;
         if (!accessToken) return;
         setUpdatingId(userId);
         setError(null);
         try {
             await updateUserRole(accessToken, userId, newRole);
-            await fetchUsers(); // Refresh list on success
+            setUsers(prevUsers => 
+                prevUsers.map(u => u.id === userId ? { ...u, role: newRole } : u)
+            );
         } catch (err: any) {
             setError(`Failed to update role: ${err.message}`);
         } finally {
@@ -72,7 +74,7 @@ export const UserManagement: React.FC = () => {
         <>
             <div className="p-6 mt-8 bg-white rounded-lg shadow-md">
                 <h3 className="text-lg font-medium leading-6 text-slate-900">User Management</h3>
-                <p className="mt-1 text-sm text-slate-500">Promote users to administrators or revoke admin privileges.</p>
+                <p className="mt-1 text-sm text-slate-500">Assign roles to users or remove them from the system.</p>
                 <div className="mt-4">
                     {isLoading && (
                         <div className="flex justify-center items-center py-8">
@@ -95,32 +97,40 @@ export const UserManagement: React.FC = () => {
                                         <tr key={user.id}>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{user.email}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'admin' ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 text-slate-800'}`}>
-                                                    {user.role}
-                                                </span>
+                                                {user.id === currentUser?.id ? (
+                                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${user.role === 'admin' ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 text-slate-800'}`}>
+                                                        {user.role}
+                                                    </span>
+                                                ) : (
+                                                    <select
+                                                        value={user.role}
+                                                        onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
+                                                        disabled={updatingId === user.id}
+                                                        className="block w-full pl-3 pr-10 py-1 text-xs border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 rounded-md disabled:opacity-75"
+                                                    >
+                                                        <option value="user">User</option>
+                                                        <option value="security">Security</option>
+                                                        <option value="admin">Admin</option>
+                                                    </select>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                {/* Prevent admins from modifying their own account */}
-                                                {user.id !== currentUser?.id ? (
-                                                    <div className="flex items-center justify-end space-x-2">
-                                                        <button
-                                                            onClick={() => handleRoleChange(user.id, user.role === 'admin' ? 'user' : 'admin')}
-                                                            disabled={updatingId === user.id}
-                                                            className={`inline-flex items-center justify-center w-32 px-3 py-1.5 text-sm font-medium text-white border border-transparent rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50
-                                                                ${user.role === 'admin' ? 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500' : 'bg-sky-600 hover:bg-sky-700 focus:ring-sky-500'}`}
-                                                        >
-                                                            {updatingId === user.id ? <SpinnerIcon className="w-4 h-4" /> : (user.role === 'admin' ? 'Remove Admin' : 'Make Admin')}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setUserToDelete(user)}
-                                                            disabled={updatingId === user.id}
-                                                            className="text-slate-400 hover:text-red-600 disabled:opacity-50 p-1.5 rounded-md hover:bg-red-50"
-                                                            title={`Delete user ${user.email}`}
-                                                        >
-                                                            <TrashIcon className="w-5 h-5" />
-                                                        </button>
+                                                {user.id !== currentUser?.id && (
+                                                    <div className="flex items-center justify-end">
+                                                        {updatingId === user.id ? 
+                                                            <SpinnerIcon className="w-5 h-5 text-slate-500 mr-2" /> 
+                                                        :
+                                                            <button
+                                                                onClick={() => setUserToDelete(user)}
+                                                                disabled={updatingId === user.id}
+                                                                className="text-slate-400 hover:text-red-600 disabled:opacity-50 p-1.5 rounded-md hover:bg-red-50"
+                                                                title={`Delete user ${user.email}`}
+                                                            >
+                                                                <TrashIcon className="w-5 h-5" />
+                                                            </button>
+                                                        }
                                                     </div>
-                                                ) : null}
+                                                )}
                                             </td>
                                         </tr>
                                     ))}

@@ -1,16 +1,18 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { CogIcon } from './icons/CogIcon';
+import { ClipboardListIcon } from './icons/ClipboardListIcon';
 
-type View = 'repository' | 'add' | 'admin';
+type View = 'repository' | 'add' | 'admin' | 'access_control';
 
 interface HeaderProps {
     currentView: View;
     onViewChange: (view: View) => void;
     isAdmin: boolean;
+    isSecurity: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange, isAdmin }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange, isAdmin, isSecurity }) => {
     const { user, logout } = useAuth();
     const activeClass = "bg-sky-600 text-white";
     const inactiveClass = "bg-white text-slate-600 hover:bg-slate-100";
@@ -40,6 +42,15 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange, isAdm
                         >
                             Add New
                         </button>
+                        {(isAdmin || isSecurity) && (
+                            <button
+                                onClick={() => onViewChange('access_control')}
+                                className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors duration-200 flex items-center space-x-2 ${currentView === 'access_control' ? activeClass : inactiveClass}`}
+                            >
+                                <ClipboardListIcon className="w-4 h-4" />
+                                <span>Access Control</span>
+                            </button>
+                        )}
                         {isAdmin && (
                             <button
                                 onClick={() => onViewChange('admin')}

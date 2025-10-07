@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { IdRepository } from './components/IdRepository';
 import { AddPersonForm } from './components/AddPersonForm';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { AccessControl } from './pages/AccessControl';
 import { LoginPage } from './pages/LoginPage';
 import { Person, Settings } from './types';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -10,11 +11,11 @@ import { SpinnerIcon } from './components/icons/SpinnerIcon';
 import { getPeople, getSettings } from './services/apiService';
 import { WarningBanner } from './components/WarningBanner';
 
-type View = 'repository' | 'add' | 'admin';
+type View = 'repository' | 'add' | 'admin' | 'access_control';
 const PAGE_LIMIT = 21;
 
 const AppContent: React.FC = () => {
-    const { session, isAdmin, loading: authLoading } = useAuth();
+    const { session, isAdmin, isSecurity, loading: authLoading } = useAuth();
     const [view, setView] = useState<View>('repository');
     const [people, setPeople] = useState<Person[]>([]);
     const [settings, setSettings] = useState<Settings>({});
@@ -123,6 +124,8 @@ const AppContent: React.FC = () => {
                 return <AddPersonForm onSuccess={handleSuccess} />;
             case 'admin':
                 return isAdmin ? <AdminDashboard settings={settings} onSettingsUpdate={handleSuccess} /> : <div className="p-10 text-center">Access Denied.</div>;
+            case 'access_control':
+                 return isAdmin || isSecurity ? <AccessControl /> : <div className="p-10 text-center">Access Denied.</div>;
             default:
                 return null;
         }
@@ -130,7 +133,7 @@ const AppContent: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <Header currentView={view} onViewChange={setView} isAdmin={isAdmin} />
+            <Header currentView={view} onViewChange={setView} isAdmin={isAdmin} isSecurity={isSecurity} />
             <WarningBanner warnings={warnings} onDismiss={() => setWarnings([])} />
             <main>{renderContent()}</main>
         </div>

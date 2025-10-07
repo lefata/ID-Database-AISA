@@ -38,8 +38,33 @@ export interface PendingUser {
     created_at: string;
 }
 
+export type UserRole = 'admin' | 'user' | 'security';
+
 export interface ManagedUser {
     id: string;
     email: string;
-    role: 'admin' | 'user';
+    role: UserRole;
+}
+
+export interface PersonAccessLog {
+    id: number;
+    created_at: string;
+    direction: 'entry' | 'exit';
+    recorder: {
+        email: string;
+    };
+}
+
+export interface AccessLog {
+    id: number;
+    created_at: string;
+    direction: 'entry' | 'exit';
+    person: {
+        firstName: string;
+        lastName: string;
+        image: string;
+    };
+    recorder: {
+        email: string;
+    };
 }
