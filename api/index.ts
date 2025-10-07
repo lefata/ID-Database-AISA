@@ -1,10 +1,7 @@
 import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-// FIX: In older Supabase v2 versions, auth types were not exported from the main package.
-// Importing 'User' from '@supabase/gotrue-js' provides the correct type definitions.
-import type { User } from '@supabase/gotrue-js';
+import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 
 export const config = {
   runtime: 'edge',
@@ -443,14 +440,15 @@ adminApp.use('/*', async (c, next) => {
 adminApp.get('/pending-users', async (c) => {
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
-        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        // FIX: Avoid destructuring to help TypeScript with control flow analysis on discriminated union types.
+        const userListResponse = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
 
-        if (error) {
-            return c.json({ error: 'Failed to list users', details: error.message }, 500);
+        if (userListResponse.error) {
+            return c.json({ error: 'Failed to list users', details: userListResponse.error.message }, 500);
         }
 
-        const pendingUsers = data.users
-            .filter((user: User) => !user.email_confirmed_at)
+        const pendingUsers = userListResponse.data.users
+            .filter((user) => !user.email_confirmed_at)
             .map(user => ({
                 id: user.id,
                 email: user.email,
