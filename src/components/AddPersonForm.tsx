@@ -1,12 +1,10 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { Person, PersonCategory, Associate, NewPersonData } from '../types';
-import { UserIcon } from './icons/UserIcon';
 import { CameraIcon } from './icons/CameraIcon';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { useAuth } from '../contexts/AuthContext';
 import { TrashIcon } from './icons/TrashIcon';
 import { ImageCropModal } from './ImageCropModal';
-import { SearchIcon } from './icons/SearchIcon';
 import { createPeople, searchAssociates } from '../services/apiService';
 
 interface AddPersonFormProps {
@@ -225,8 +223,29 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
                                             <label htmlFor="guardianSearch" className="block text-sm font-medium text-slate-700">Select Existing Guardians (Parents or Staff)</label>
                                             <div className="relative"><input id="guardianSearch" type="text" value={guardianSearch} onChange={handleGuardianSearchChange} placeholder="Start typing a name..." className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" />
                                             {isGuardianSearching && <SpinnerIcon className="absolute right-3 top-3.5 w-5 h-5 text-slate-400" />}</div>
-                                            {guardianResults.length > 0 && <ul className="mt-1 border rounded-md shadow-sm bg-white max-h-48 overflow-y-auto">{guardianResults.map(p => <li key={p.id} onClick={() => handleSelectGuardian(p)} className="p-2 text-sm cursor-pointer hover:bg-sky-50">{p.firstName} {p.lastName}</li>)}</ul>}
-                                            {selectedGuardians.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{selectedGuardians.map(g => <span key={g.id} className="flex items-center space-x-2 bg-sky-100 text-sky-800 text-sm font-medium px-3 py-1 rounded-full"><UserIcon className="w-4 h-4" /><span>{g.firstName} {g.lastName}</span><button type="button" onClick={() => setSelectedGuardians(prev => prev.filter(sg => sg.id !== g.id))} className="text-sky-600 hover:text-sky-800"><XIcon /></button></span>)}</div>}
+                                            {guardianResults.length > 0 && (
+                                                <ul className="mt-1 border rounded-md shadow-sm bg-white max-h-48 overflow-y-auto">
+                                                    {guardianResults.map(p => (
+                                                        <li key={p.id} onClick={() => handleSelectGuardian(p)} className="flex items-center p-2 space-x-3 cursor-pointer hover:bg-sky-50">
+                                                            <img src={p.image} alt={`${p.firstName} ${p.lastName}`} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                                                            <span className="text-sm">{p.firstName} {p.lastName}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                            {selectedGuardians.length > 0 && (
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                    {selectedGuardians.map(g => (
+                                                        <span key={g.id} className="flex items-center space-x-2 bg-sky-100 text-sky-800 text-sm font-medium pl-1 pr-2 py-1 rounded-full">
+                                                            <img src={g.image} alt={`${g.firstName} ${g.lastName}`} className="w-6 h-6 rounded-full object-cover" />
+                                                            <span>{g.firstName} {g.lastName}</span>
+                                                            <button type="button" onClick={() => setSelectedGuardians(prev => prev.filter(sg => sg.id !== g.id))} className="text-sky-600 hover:text-sky-800">
+                                                                <XIcon className="w-3 h-3" />
+                                                            </button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                         <div>
                                             <h4 className="text-sm font-medium text-slate-700 mb-2">Add New Guardians</h4>

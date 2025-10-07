@@ -347,7 +347,7 @@ app.get('/people', async (c) => {
       const uniqueGuardianIds = [...new Set(studentGuardianIds)];
       const { data: guardians, error: guardianError } = await supabase
           .from('people')
-          .select('id, firstName, lastName')
+          .select('id, firstName, lastName, image')
           .in('id', uniqueGuardianIds);
 
       if (guardianError) {
@@ -371,7 +371,7 @@ app.get('/associates', async (c) => {
     const supabase = c.get('supabase');
     const search = c.req.query('search') || '';
     if (!search || search.length < 2) return c.json([]);
-    let query = supabase.from('people').select('id, firstName, lastName').in('category', [PersonCategory.STAFF, PersonCategory.PARENT]);
+    let query = supabase.from('people').select('id, firstName, lastName, image').in('category', [PersonCategory.STAFF, PersonCategory.PARENT]);
     const searchWords = search.trim().split(' ').filter(w => w.length > 0);
     const orConditions = searchWords.map(word => `firstName.ilike.%${word}%,lastName.ilike.%${word}%`).join(',');
     query = query.or(orConditions);

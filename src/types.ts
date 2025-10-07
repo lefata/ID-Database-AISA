@@ -27,6 +27,7 @@ export interface Associate {
   id: number;
   firstName: string;
   lastName: string;
+  image: string;
 }
 
 // Data shape for creating a new person, before it has a database ID or generated bio.
