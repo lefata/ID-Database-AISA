@@ -122,7 +122,52 @@ CREATE POLICY "Allow public read access to avatars"
 ON storage.objects FOR SELECT
 USING ( bucket_id = 'avatars' );
 
--- 8. Create the schema verification and repair function
+-- 8. Create the analytics function
+CREATE OR REPLACE FUNCTION get_parent_analytics()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    RETURN (
+        WITH parent_logs_today AS (
+            SELECT
+                l.person_id,
+                l.direction,
+                l.created_at
+            FROM
+                access_logs l
+            JOIN
+                people p ON l.person_id = p.id
+            WHERE
+                p.category = 'Parent/Guardian' AND
+                l.created_at >= date_trunc('day', now() at time zone 'utc')
+        ),
+        last_action AS (
+            SELECT DISTINCT ON (person_id)
+                person_id,
+                direction
+            FROM
+                access_logs -- Query all logs, not just today's
+            JOIN
+                people p ON access_logs.person_id = p.id
+            WHERE 
+                p.category = 'Parent/Guardian'
+            ORDER BY
+                person_id, created_at DESC
+        )
+        SELECT jsonb_build_object(
+            'on_campus', (SELECT count(*) FROM last_action WHERE direction = 'entry'),
+            'entries_today', (SELECT count(*) FROM parent_logs_today WHERE direction = 'entry'),
+            'exits_today', (SELECT count(*) FROM parent_logs_today WHERE direction = 'exit')
+        )
+    );
+END;
+$$;
+
+
+-- 9. Create the schema verification and repair function
 CREATE OR REPLACE FUNCTION verify_and_repair_schema()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -152,6 +197,10 @@ BEGIN
     CREATE OR REPLACE FUNCTION is_admin() RETURNS BOOLEAN LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $func$ SELECT COALESCE((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin', FALSE) $func$;
     CREATE OR REPLACE FUNCTION is_admin_or_security() RETURNS BOOLEAN LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $func_sec$ SELECT COALESCE((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin', (auth.jwt() -> 'user_metadata' ->> 'role') = 'security', FALSE) $func_sec$;
     logs := logs || jsonb_build_object('status', 'success', 'step', 'Create/Replace RLS Functions', 'details', 'Functions "is_admin" and "is_admin_or_security" were created or updated.');
+    
+    -- Analytics function
+    CREATE OR REPLACE FUNCTION get_parent_analytics() RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $analytics_func$ BEGIN RETURN (WITH parent_logs_today AS (SELECT l.person_id,l.direction,l.created_at FROM access_logs l JOIN people p ON l.person_id = p.id WHERE p.category = 'Parent/Guardian' AND l.created_at >= date_trunc('day', now() at time zone 'utc')), last_action AS (SELECT DISTINCT ON (person_id) person_id,direction FROM access_logs JOIN people p ON access_logs.person_id = p.id WHERE p.category = 'Parent/Guardian' ORDER BY person_id, created_at DESC) SELECT jsonb_build_object('on_campus', (SELECT count(*) FROM last_action WHERE direction = 'entry'),'entries_today', (SELECT count(*) FROM parent_logs_today WHERE direction = 'entry'),'exits_today', (SELECT count(*) FROM parent_logs_today WHERE direction = 'exit'))); END; $analytics_func$;
+    logs := logs || jsonb_build_object('status', 'success', 'step', 'Create/Replace Analytics Function', 'details', 'Function "get_parent_analytics" was created or updated.');
 
     -- RLS policies
     ALTER TABLE public.people ENABLE ROW LEVEL SECURITY;

@@ -57,7 +57,7 @@ const AccessHistory: React.FC<{ personId: number }> = ({ personId }) => {
                     </div>
                     <div className="flex-1">
                         <p className="font-semibold text-slate-800 capitalize">{log.direction}</p>
-                        <p className="text-sm text-slate-500">Recorded by {log.recorder.email}</p>
+                        <p className="text-sm text-slate-500">Recorded by {log.recorder?.email || 'Unknown'}</p>
                     </div>
                     <div className="text-right text-sm text-slate-500">
                         <p>{new Date(log.created_at).toLocaleDateString()}</p>

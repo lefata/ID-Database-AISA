@@ -39,6 +39,10 @@ BEGIN
     CREATE OR REPLACE FUNCTION is_admin_or_security() RETURNS BOOLEAN LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $func_sec$ SELECT COALESCE((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin', (auth.jwt() -> 'user_metadata' ->> 'role') = 'security', FALSE) $func_sec$;
     logs := logs || jsonb_build_object('status', 'success', 'step', 'Create/Replace RLS Functions', 'details', 'Functions "is_admin" and "is_admin_or_security" were created or updated.');
 
+    -- Analytics function
+    CREATE OR REPLACE FUNCTION get_parent_analytics() RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $analytics_func$ BEGIN RETURN (WITH parent_logs_today AS (SELECT l.person_id,l.direction,l.created_at FROM access_logs l JOIN people p ON l.person_id = p.id WHERE p.category = 'Parent/Guardian' AND l.created_at >= date_trunc('day', now() at time zone 'utc')), last_action AS (SELECT DISTINCT ON (person_id) person_id,direction FROM access_logs JOIN people p ON access_logs.person_id = p.id WHERE p.category = 'Parent/Guardian' ORDER BY person_id, created_at DESC) SELECT jsonb_build_object('on_campus', (SELECT count(*) FROM last_action WHERE direction = 'entry'),'entries_today', (SELECT count(*) FROM parent_logs_today WHERE direction = 'entry'),'exits_today', (SELECT count(*) FROM parent_logs_today WHERE direction = 'exit'))); END; $analytics_func$;
+    logs := logs || jsonb_build_object('status', 'success', 'step', 'Create/Replace Analytics Function', 'details', 'Function "get_parent_analytics" was created or updated.');
+
     -- RLS policies
     ALTER TABLE public.people ENABLE ROW LEVEL SECURITY;
     DROP POLICY IF EXISTS "Allow authenticated read access" ON public.people; CREATE POLICY "Allow authenticated read access" ON public.people FOR SELECT TO authenticated USING (TRUE);
@@ -502,50 +506,48 @@ app.post('/logs', adminOrSecurity, async (c) => {
 app.get('/logs', adminOrSecurity, async (c) => {
     const supabase = c.get('supabase');
     const limit = parseInt(c.req.query('limit') || '20');
-    const { data, error } = await supabase
+    
+    const { data: logs, error } = await supabase
         .from('access_logs')
-        .select('*, person:people(firstName, lastName, image), recorder:users(email)')
+        .select('*, person:people(firstName, lastName, image)')
         .order('created_at', { ascending: false })
         .limit(limit);
+
     if (error) {
         console.error('Error fetching recent logs:', error);
         return c.json({ error: 'Failed to fetch recent logs.', details: error.message }, 500);
     }
-    return c.json(data);
+    if (!logs || logs.length === 0) {
+        return c.json([]);
+    }
+
+    const recorderIds = [...new Set(logs.map(log => log.recorded_by).filter(Boolean))];
+    if (recorderIds.length > 0) {
+        try {
+            const { supabaseAdmin } = await import('./supabaseAdminClient');
+            const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+            if (usersError) throw usersError;
+            
+            // FIX: Explicitly type the user object in the map function to resolve ambiguity.
+            // This ensures TypeScript understands that `users.map` produces an array of [key, value] tuples.
+            const userMap = new Map(users.map((u: { id: string; email?: string; }) => [u.id, u.email]));
+            
+            logs.forEach((log: any) => {
+                log.recorder = { email: userMap.get(log.recorded_by) || 'Unknown User' };
+            });
+        } catch(usersError: any) {
+            console.error('Error fetching recorder details:', usersError);
+            logs.forEach((log: any) => {
+                log.recorder = { email: 'Error fetching name' };
+            });
+        }
+    }
+    return c.json(logs);
 });
 
 app.get('/logs/analytics', adminOrSecurity, async (c) => {
     const supabase = c.get('supabase');
-    const query = `
-        WITH parent_logs_today AS (
-            SELECT
-                l.person_id,
-                l.direction,
-                l.created_at
-            FROM
-                access_logs l
-            JOIN
-                people p ON l.person_id = p.id
-            WHERE
-                p.category = 'Parent/Guardian' AND
-                l.created_at >= date_trunc('day', now() at time zone 'utc')
-        ),
-        last_action AS (
-            SELECT DISTINCT ON (person_id)
-                person_id,
-                direction
-            FROM
-                parent_logs_today
-            ORDER BY
-                person_id, created_at DESC
-        )
-        SELECT
-            (SELECT count(*) FROM last_action WHERE direction = 'entry') AS on_campus,
-            (SELECT count(*) FROM parent_logs_today WHERE direction = 'entry') AS entries_today,
-            (SELECT count(*) FROM parent_logs_today WHERE direction = 'exit') AS exits_today
-    `;
-    const { data, error } = await supabase.rpc('sql', { sql: query }).single();
-
+    const { data, error } = await supabase.rpc('get_parent_analytics').single();
     if (error) {
         console.error('Error fetching analytics:', error);
         return c.json({ error: 'Failed to fetch analytics data.', details: error.message }, 500);
@@ -557,16 +559,43 @@ app.get('/logs/analytics', adminOrSecurity, async (c) => {
 app.get('/people/:id/logs', adminOrSecurity, async (c) => {
     const supabase = c.get('supabase');
     const personId = c.req.param('id');
-    const { data, error } = await supabase
+    
+    const { data: logs, error } = await supabase
         .from('access_logs')
-        .select('*, recorder:users(email)')
+        .select('*')
         .eq('person_id', personId)
         .order('created_at', { ascending: false });
+
     if (error) {
         console.error(`Error fetching logs for person ${personId}:`, error);
         return c.json({ error: 'Failed to fetch access logs.', details: error.message }, 500);
     }
-    return c.json(data);
+    if (!logs || logs.length === 0) {
+        return c.json([]);
+    }
+
+    const recorderIds = [...new Set(logs.map(log => log.recorded_by).filter(Boolean))];
+    if (recorderIds.length > 0) {
+        try {
+            const { supabaseAdmin } = await import('./supabaseAdminClient');
+            const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+            if (usersError) throw usersError;
+            
+            // FIX: Explicitly type the user object in the map function to resolve ambiguity.
+            // This ensures TypeScript understands that `users.map` produces an array of [key, value] tuples.
+            const userMap = new Map(users.map((u: { id: string; email?: string; }) => [u.id, u.email]));
+            
+            logs.forEach((log: any) => {
+                log.recorder = { email: userMap.get(log.recorded_by) || 'Unknown User' };
+            });
+        } catch(usersError: any) {
+            console.error('Error fetching recorder details:', usersError);
+            logs.forEach((log: any) => {
+                log.recorder = { email: 'Error fetching name' };
+            });
+        }
+    }
+    return c.json(logs);
 });
 
 // --- ADMIN ROUTES ---
