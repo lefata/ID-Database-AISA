@@ -514,6 +514,46 @@ app.get('/logs', adminOrSecurity, async (c) => {
     return c.json(data);
 });
 
+app.get('/logs/analytics', adminOrSecurity, async (c) => {
+    const supabase = c.get('supabase');
+    const query = `
+        WITH parent_logs_today AS (
+            SELECT
+                l.person_id,
+                l.direction,
+                l.created_at
+            FROM
+                access_logs l
+            JOIN
+                people p ON l.person_id = p.id
+            WHERE
+                p.category = 'Parent/Guardian' AND
+                l.created_at >= date_trunc('day', now() at time zone 'utc')
+        ),
+        last_action AS (
+            SELECT DISTINCT ON (person_id)
+                person_id,
+                direction
+            FROM
+                parent_logs_today
+            ORDER BY
+                person_id, created_at DESC
+        )
+        SELECT
+            (SELECT count(*) FROM last_action WHERE direction = 'entry') AS on_campus,
+            (SELECT count(*) FROM parent_logs_today WHERE direction = 'entry') AS entries_today,
+            (SELECT count(*) FROM parent_logs_today WHERE direction = 'exit') AS exits_today
+    `;
+    const { data, error } = await supabase.rpc('sql', { sql: query }).single();
+
+    if (error) {
+        console.error('Error fetching analytics:', error);
+        return c.json({ error: 'Failed to fetch analytics data.', details: error.message }, 500);
+    }
+    return c.json(data);
+});
+
+
 app.get('/people/:id/logs', adminOrSecurity, async (c) => {
     const supabase = c.get('supabase');
     const personId = c.req.param('id');

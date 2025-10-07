@@ -1,4 +1,4 @@
-import { Person, Settings, Associate, NewPersonData, PendingUser, ManagedUser, AccessLog, PersonAccessLog, UserRole } from '../types';
+import { Person, Settings, Associate, NewPersonData, PendingUser, ManagedUser, AccessLog, PersonAccessLog, UserRole, AnalyticsData } from '../types';
 
 // --- Private Helper ---
 const API_BASE_URL = (import.meta as any).env.VITE_API_URL || '';
@@ -109,6 +109,10 @@ export const getRecentLogs = (token: string): Promise<AccessLog[]> => {
 
 export const getPersonLogs = (token: string, personId: number): Promise<PersonAccessLog[]> => {
     return fetchWithTimeout(`/api/people/${personId}/logs`, { headers: { 'Authorization': `Bearer ${token}` } });
+};
+
+export const getAnalytics = (token: string): Promise<AnalyticsData> => {
+    return fetchWithTimeout('/api/logs/analytics', { headers: { 'Authorization': `Bearer ${token}` } });
 };
 
 

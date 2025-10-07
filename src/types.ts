@@ -69,3 +69,9 @@ export interface AccessLog {
         email: string;
     };
 }
+
+export interface AnalyticsData {
+    on_campus: number;
+    entries_today: number;
+    exits_today: number;
+}
