@@ -525,6 +525,9 @@ adminApp.put('/users/:id/role', async (c) => {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
         const { data: { user: userToUpdate }, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(userId);
         if (fetchError) throw fetchError;
+        if (!userToUpdate) {
+            return c.json({ error: 'User not found' }, 404);
+        }
         const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
             user_metadata: { ...userToUpdate.user_metadata, role },
         });
