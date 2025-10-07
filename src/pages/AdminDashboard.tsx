@@ -189,6 +189,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ settings, onSett
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+    // Sync state with props to ensure the input field updates after a save.
+    useEffect(() => {
+        setSheetId(settings.googleSheetId || '');
+    }, [settings.googleSheetId]);
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);

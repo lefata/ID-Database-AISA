@@ -9,7 +9,9 @@ export const config = {
 
 const createSheetErrorWarning = (studentName: string, errorMessage: string): string => {
     let cleanError = `Could not retrieve Google Sheet ID for ${studentName}. A random ID was assigned.`;
-    if (errorMessage.includes('SERVICE_DISABLED') || errorMessage.includes('API has not been used')) {
+    if (errorMessage.includes('Failed to fetch Google Sheet configuration')) {
+        cleanError += ` REASON: ${errorMessage}. Please check database permissions or server logs.`;
+    } else if (errorMessage.includes('SERVICE_DISABLED') || errorMessage.includes('API has not been used')) {
         cleanError += ' REASON: The Google Sheets API is not enabled for your project. Please check your Google Cloud Console and follow the setup instructions in the README.';
     } else if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('403')) {
         cleanError += ' REASON: Permission denied. Please ensure your API key is correct and the Google Sheet is public ("Anyone with the link can view").';
@@ -51,7 +53,8 @@ async function getSheetIdForStudent(supabase: SupabaseClient, firstName: string,
       
     if (settingsError) {
         console.error('Could not fetch googleSheetId from settings:', settingsError);
-        return null;
+        // Throw an error to be caught by the caller, which will generate a user warning.
+        throw new Error(`Failed to fetch Google Sheet configuration from database: ${settingsError.message}`);
     }
 
     const sheetId = settingsData?.value;
@@ -457,15 +460,15 @@ adminApp.use('/*', async (c, next) => {
 adminApp.get('/pending-users', async (c) => {
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
-        // FIX: Destructuring `users` directly from the response `data` object helps TypeScript correctly narrow the type.
-        // The previous implementation caused a type inference issue where 'user' was inferred as 'never'.
-        const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        // FIX: Avoided nested destructuring which can cause issues with discriminated unions.
+        // This helps TypeScript correctly infer the type of `user` in the filter method.
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
 
         if (error) {
             return c.json({ error: 'Failed to list users', details: error.message }, 500);
         }
 
-        const pendingUsers = users
+        const pendingUsers = data.users
             .filter((user) => !user.email_confirmed_at)
             .map(user => ({
                 id: user.id,
