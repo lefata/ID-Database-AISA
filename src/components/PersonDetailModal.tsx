@@ -56,7 +56,7 @@ const AccessHistory: React.FC<{ personId: number }> = ({ personId }) => {
                         {log.direction === 'entry' ? <ArrowRightIcon className="w-5 h-5" /> : <ArrowLeftIcon className="w-5 h-5" />}
                     </div>
                     <div className="flex-1">
-                        <p className="font-semibold text-slate-800 capitalize">{log.direction}</p>
+                        <p className="font-semibold text-slate-800 capitalize">{log.direction} at <span className="font-normal">{log.location}</span></p>
                         <p className="text-sm text-slate-500">Recorded by {log.recorder?.email || 'Unknown'}</p>
                     </div>
                     <div className="text-right text-sm text-slate-500">

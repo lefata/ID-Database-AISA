@@ -95,11 +95,11 @@ export const updateSetting = (token: string, key: string, value: string): Promis
 
 // --- Access Logs API ---
 
-export const logAccess = (token: string, personId: number, direction: 'entry' | 'exit'): Promise<{ success: boolean }> => {
+export const logAccess = (token: string, personId: number, direction: 'entry' | 'exit', location: string): Promise<{ success: boolean }> => {
     return fetchWithTimeout('/api/logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ personId, direction }),
+        body: JSON.stringify({ personId, direction, location }),
     });
 };
 

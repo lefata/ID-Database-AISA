@@ -51,6 +51,7 @@ export interface PersonAccessLog {
     id: number;
     created_at: string;
     direction: 'entry' | 'exit';
+    location: string;
     recorder: {
         email: string;
     };
@@ -60,6 +61,7 @@ export interface AccessLog {
     id: number;
     created_at: string;
     direction: 'entry' | 'exit';
+    location: string;
     person: {
         firstName: string;
         lastName: string;

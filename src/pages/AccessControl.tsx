@@ -8,6 +8,7 @@ import { ArrowRightIcon } from '../components/icons/ArrowRightIcon';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { XCircleIcon } from '../components/icons/XCircleIcon';
 import { BuildingOfficeIcon } from '../components/icons/BuildingOfficeIcon';
+import { LocationMarkerIcon } from '../components/icons/LocationMarkerIcon';
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
     let timeout: ReturnType<typeof setTimeout>;
@@ -16,6 +17,8 @@ const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) =
         timeout = setTimeout(() => func(...args), waitFor);
     };
 };
+
+const locations = ['Gate 1', 'Gate 2', 'Route 66 Gate', 'Apartment Gate'];
 
 const AnalyticsCard: React.FC<{ title: string; value: number | null; icon: React.ReactNode }> = ({ title, value, icon }) => (
     <div className="bg-white rounded-lg shadow p-4 flex items-center space-x-4">
@@ -45,6 +48,7 @@ export const AccessControl: React.FC = () => {
     const [successLog, setSuccessLog] = useState<{ personId: number; direction: 'entry' | 'exit' } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [newLogIds, setNewLogIds] = useState<Set<number>>(new Set());
+    const [selectedLocations, setSelectedLocations] = useState<Record<number, string>>({});
     
     const sessionRef = useRef(session);
     sessionRef.current = session;
@@ -115,10 +119,13 @@ export const AccessControl: React.FC = () => {
     const handleLog = async (personId: number, direction: 'entry' | 'exit') => {
         const accessToken = sessionRef.current?.access_token;
         if (!accessToken) return;
+
+        const location = selectedLocations[personId] || locations[0];
+
         setIsLogging(personId);
         setError(null);
         try {
-            await logAccess(accessToken, personId, direction);
+            await logAccess(accessToken, personId, direction, location);
             setSuccessLog({ personId, direction });
             setTimeout(() => setSuccessLog(null), 2000);
             fetchData(); // Immediately refresh data after logging
@@ -143,7 +150,7 @@ export const AccessControl: React.FC = () => {
                 <div className="flex-1">
                     <p className="text-sm font-semibold text-slate-800">{log.person.firstName} {log.person.lastName}</p>
                     <p className="text-xs text-slate-500">
-                        Logged <span className={`font-bold ${isEntry ? 'text-emerald-600' : 'text-amber-600'}`}>{log.direction}</span> by {log.recorder.email}
+                        Logged <span className={`font-bold ${isEntry ? 'text-emerald-600' : 'text-amber-600'}`}>{log.direction}</span> at <strong className="text-slate-600">{log.location}</strong> by {log.recorder.email}
                     </p>
                 </div>
                 <div className="text-right">
@@ -194,24 +201,46 @@ export const AccessControl: React.FC = () => {
 
                             <div className="mt-4 space-y-3 max-h-96 overflow-y-auto">
                                 {searchResults.map(person => (
-                                    <div key={person.id} className="p-4 bg-slate-50 rounded-lg border flex items-center space-x-4">
-                                        <img src={person.image} alt="profile" className="w-16 h-16 rounded-full object-cover" />
-                                        <div className="flex-1">
-                                            <p className="font-bold text-slate-800">{person.firstName} {person.lastName}</p>
-                                            <p className="text-sm text-slate-500">{person.category} - {person.role || person.class}</p>
-                                        </div>
-                                        {isLogging === person.id ? <SpinnerIcon className="w-6 h-6 text-sky-600" /> : successLog?.personId === person.id ? (
-                                             <p className={`font-bold text-lg ${successLog.direction === 'entry' ? 'text-emerald-500' : 'text-amber-500'}`}>{successLog.direction === 'entry' ? 'Entered!' : 'Exited!'}</p>
-                                        ) : (
-                                            <div className="flex space-x-2">
-                                                <button onClick={() => handleLog(person.id, 'entry')} className="flex items-center justify-center space-x-2 w-32 px-4 py-2 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition">
-                                                    <ArrowRightIcon /><span>Log Entry</span>
-                                                </button>
-                                                <button onClick={() => handleLog(person.id, 'exit')} className="flex items-center justify-center space-x-2 w-32 px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg shadow-md hover:bg-amber-600 transition">
-                                                    <ArrowLeftIcon /><span>Log Exit</span>
-                                                </button>
+                                    <div key={person.id} className="p-4 bg-slate-50 rounded-lg border flex flex-col space-y-4">
+                                        <div className="flex items-center space-x-4 w-full">
+                                            <img src={person.image} alt="profile" className="w-16 h-16 rounded-full object-cover" />
+                                            <div className="flex-1">
+                                                <p className="font-bold text-slate-800">{person.firstName} {person.lastName}</p>
+                                                <p className="text-sm text-slate-500">{person.category} - {person.role || person.class}</p>
                                             </div>
-                                        )}
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center border-t border-slate-200 pt-4 w-full">
+                                             <div>
+                                                <label htmlFor={`location-${person.id}`} className="block text-xs font-medium text-slate-600 mb-1">Location</label>
+                                                <div className="relative">
+                                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                        <LocationMarkerIcon className="h-5 w-5 text-slate-400" />
+                                                    </div>
+                                                    <select
+                                                        id={`location-${person.id}`}
+                                                        className="w-full block pl-10 pr-4 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 sm:text-sm"
+                                                        value={selectedLocations[person.id] || locations[0]}
+                                                        onChange={(e) => setSelectedLocations(prev => ({ ...prev, [person.id]: e.target.value }))}
+                                                    >
+                                                        {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div className="flex space-x-2 sm:justify-self-end sm:self-end">
+                                                {isLogging === person.id ? <SpinnerIcon className="w-6 h-6 text-sky-600" /> : successLog?.personId === person.id ? (
+                                                    <p className={`font-bold text-lg ${successLog.direction === 'entry' ? 'text-emerald-500' : 'text-amber-500'}`}>{successLog.direction === 'entry' ? 'Entered!' : 'Exited!'}</p>
+                                                ) : (
+                                                    <>
+                                                        <button onClick={() => handleLog(person.id, 'entry')} className="flex items-center justify-center space-x-2 w-32 px-4 py-2 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition">
+                                                            <ArrowRightIcon /><span>Log Entry</span>
+                                                        </button>
+                                                        <button onClick={() => handleLog(person.id, 'exit')} className="flex items-center justify-center space-x-2 w-32 px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg shadow-md hover:bg-amber-600 transition">
+                                                            <ArrowLeftIcon /><span>Log Exit</span>
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
                                 {!isSearching && searchTerm.length > 1 && searchResults.length === 0 && (
