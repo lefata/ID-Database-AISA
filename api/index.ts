@@ -440,15 +440,15 @@ adminApp.use('/*', async (c, next) => {
 adminApp.get('/pending-users', async (c) => {
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
-        // FIX: Do not destructure the supabase response. Keeping it as a single object
-        // allows TypeScript to correctly narrow types for discriminated unions.
-        const response = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        // FIX: Destructuring the response from Supabase is a common pattern that helps with type narrowing.
+        // The previous implementation without destructuring caused a type inference issue where 'user' was inferred as 'never'.
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
 
-        if (response.error) {
-            return c.json({ error: 'Failed to list users', details: response.error.message }, 500);
+        if (error) {
+            return c.json({ error: 'Failed to list users', details: error.message }, 500);
         }
 
-        const pendingUsers = response.data.users
+        const pendingUsers = data.users
             .filter((user) => !user.email_confirmed_at)
             .map(user => ({
                 id: user.id,

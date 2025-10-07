@@ -219,30 +219,34 @@ async function checkAndCreateStorageBucket() {
 }
 
 async function checkAndSeed() {
-  console.log('🚀 Starting Supabase database setup...');
+  console.log('🚀 Starting Supabase database setup & verification...');
 
   try {
-    // 0. Verify and create the storage bucket. This is a critical prerequisite.
+    // 1. Verify and create the storage bucket.
     await checkAndCreateStorageBucket();
       
-    // 1. Check if the 'people' table exists to verify basic setup.
-    console.log('ℹ️ Verifying database schema...');
-    const { error: tableCheckError } = await supabase.from('people').select('id').limit(1);
+    // 2. Verify the schema by checking for the self-repair function.
+    // This is the most reliable way to detect an outdated schema.
+    console.log('ℹ️ Verifying database schema by checking for the self-repair function...');
+    const { error: rpcError } = await supabase.rpc('verify_and_repair_schema');
 
-    if (tableCheckError && tableCheckError.code === '42P01') { // 42P01 is "undefined_table" in Postgres
-      console.error('❌ ERROR: One or more required tables were not found.');
-      console.log('---------------------------------------------------------------------------------');
-      console.log('Please run all the following SQL commands in your Supabase SQL Editor:');
-      console.log('\n' + REQUIRED_SQL + '\n');
-      console.log('After creating the tables and policies, re-run this script: `npm run db:setup`');
-      console.log('---------------------------------------------------------------------------------');
-      (process as any).exit(1);
-    } else if (tableCheckError) {
-      throw new Error(`Failed to check tables: ${tableCheckError.message}`);
+    if (rpcError && rpcError.message.includes('Could not find the function')) {
+        console.error('❌ ERROR: Your database schema is outdated because the `verify_and_repair_schema` function is missing.');
+        console.log('---------------------------------------------------------------------------------');
+        console.log('SOLUTION: Please run the following SQL script in your Supabase SQL Editor to update your schema.');
+        console.log('This script is idempotent (safe to run multiple times) and will create the necessary function.');
+        console.log('\n' + REQUIRED_SQL + '\n');
+        console.log('After running the script, re-run this command: `npm run db:setup`');
+        console.log('---------------------------------------------------------------------------------');
+        (process as any).exit(1);
+    } else if (rpcError) {
+        console.error('❌ An unexpected error occurred while verifying the schema:', rpcError);
+        (process as any).exit(1);
+    } else {
+        console.log('✅ Database schema is up-to-date.');
     }
-    console.log('✅ Database schema verified.');
 
-    // 2. Check if settings are seeded
+    // 3. Check if settings are seeded
     const { data: settings, error: settingsError } = await supabase.from('settings').select('key');
     if(settingsError) throw settingsError;
     
@@ -257,7 +261,7 @@ async function checkAndSeed() {
         console.log('ℹ️ Settings already exist, skipping seed.');
     }
 
-    // 3. Check if people data is seeded
+    // 4. Check if people data is seeded
     const { count, error: countError } = await supabase.from('people').select('*', { count: 'exact', head: true });
     if (countError) throw countError;
 
