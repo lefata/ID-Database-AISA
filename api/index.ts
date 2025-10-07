@@ -7,6 +7,22 @@ export const config = {
   runtime: 'edge',
 };
 
+const createSheetErrorWarning = (studentName: string, errorMessage: string): string => {
+    let cleanError = `Could not retrieve Google Sheet ID for ${studentName}. A random ID was assigned.`;
+    if (errorMessage.includes('SERVICE_DISABLED') || errorMessage.includes('API has not been used')) {
+        cleanError += ' REASON: The Google Sheets API is not enabled for your project. Please check your Google Cloud Console and follow the setup instructions in the README.';
+    } else if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('403')) {
+        cleanError += ' REASON: Permission denied. Please ensure your API key is correct and the Google Sheet is public ("Anyone with the link can view").';
+    } else if (errorMessage.includes('timed out')) {
+        cleanError += ' REASON: The request to Google Sheets timed out. Please try again later.';
+    } else if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+        cleanError += ' REASON: The sheet was not found. Please verify the Google Sheet ID in the Admin Dashboard is correct.';
+    } else {
+         cleanError += ' REASON: An unexpected error occurred. Please check the API configuration, ensure the sheet is public, and that the student\'s name exists in the sheet.';
+    }
+    return cleanError;
+};
+
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -81,10 +97,9 @@ async function getSheetIdForStudent(supabase: SupabaseClient, firstName: string,
             }
         }
         return null; // Student not found
-    } catch (err) {
+    } catch (err: any) {
         console.error('Error processing request to Google Sheets API:', err);
-        // Throw a generic error to the caller, as we've already logged the specific one.
-        throw new Error('Failed to communicate with Google Sheets.');
+        throw err;
     }
 }
 
@@ -321,6 +336,7 @@ app.post('/people', async (c) => {
   const supabase = c.get('supabase');
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY_ALIAS_FOR_GEMINI! });
   const peopleToAdd: NewPersonData[] = await c.req.json();
+  const warnings: string[] = [];
 
   if (!Array.isArray(peopleToAdd) || peopleToAdd.length === 0) {
     return c.json({ error: 'Invalid payload' }, 400);
@@ -367,9 +383,10 @@ app.post('/people', async (c) => {
                 let googleSheetId: string;
                 try {
                     googleSheetId = await getSheetIdForStudent(supabase, student.firstName, student.lastName) ?? `GS-${Math.floor(10000 + Math.random() * 90000)}`;
-                } catch (e) {
+                } catch (e: any) {
                     console.warn(`Could not retrieve student ID from Google Sheet for ${student.firstName} ${student.lastName}. Falling back to random ID.`, e);
                     googleSheetId = `GS-${Math.floor(10000 + Math.random() * 90000)}`;
+                    warnings.push(createSheetErrorWarning(`${student.firstName} ${student.lastName}`, e.message));
                 }
 
                 return {
@@ -389,7 +406,7 @@ app.post('/people', async (c) => {
         if (error) throw new Error(`Supabase student insert error: ${error.message}`);
     }
 
-    return c.json({ success: true }, 201);
+    return c.json({ success: true, warnings: warnings.length > 0 ? warnings : undefined }, 201);
   } catch (e: any) {
     console.error(e);
     return c.json({ error: 'Failed to create profiles', details: e.message }, 500);
@@ -440,15 +457,15 @@ adminApp.use('/*', async (c, next) => {
 adminApp.get('/pending-users', async (c) => {
     try {
         const { supabaseAdmin } = await import('./supabaseAdminClient');
-        // FIX: Destructuring the response from Supabase is a common pattern that helps with type narrowing.
-        // The previous implementation without destructuring caused a type inference issue where 'user' was inferred as 'never'.
-        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        // FIX: Destructuring `users` directly from the response `data` object helps TypeScript correctly narrow the type.
+        // The previous implementation caused a type inference issue where 'user' was inferred as 'never'.
+        const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
 
         if (error) {
             return c.json({ error: 'Failed to list users', details: error.message }, 500);
         }
 
-        const pendingUsers = data.users
+        const pendingUsers = users
             .filter((user) => !user.email_confirmed_at)
             .map(user => ({
                 id: user.id,

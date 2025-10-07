@@ -8,6 +8,7 @@ import { Person, Settings } from './types';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SpinnerIcon } from './components/icons/SpinnerIcon';
 import { getPeople, getSettings } from './services/apiService';
+import { WarningBanner } from './components/WarningBanner';
 
 type View = 'repository' | 'add' | 'admin';
 const PAGE_LIMIT = 21;
@@ -22,6 +23,7 @@ const AppContent: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [warnings, setWarnings] = useState<string[]>([]);
 
     const sessionRef = useRef(session);
     sessionRef.current = session;
@@ -63,9 +65,12 @@ const AppContent: React.FC = () => {
         }
     }, [userId, authLoading, searchTerm, fetchAllData]);
 
-    const handleSuccess = useCallback(() => {
+    const handleSuccess = useCallback((response?: { warnings?: string[] }) => {
         fetchAllData(currentPage, searchTerm);
         setView('repository');
+        if (response?.warnings && response.warnings.length > 0) {
+            setWarnings(response.warnings);
+        }
     }, [currentPage, searchTerm, fetchAllData]);
 
     const handleSearchChange = useCallback((term: string) => {
@@ -126,6 +131,7 @@ const AppContent: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-50">
             <Header currentView={view} onViewChange={setView} isAdmin={isAdmin} />
+            <WarningBanner warnings={warnings} onDismiss={() => setWarnings([])} />
             <main>{renderContent()}</main>
         </div>
     );

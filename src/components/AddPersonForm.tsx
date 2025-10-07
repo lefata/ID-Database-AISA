@@ -10,7 +10,7 @@ import { SearchIcon } from './icons/SearchIcon';
 import { createPeople, searchAssociates } from '../services/apiService';
 
 interface AddPersonFormProps {
-    onSuccess: () => void;
+    onSuccess: (response: { warnings?: string[] }) => void;
 }
 
 type NewGuardianData = Omit<NewPersonData, 'category' | 'role' | 'class' | 'guardianIds' | 'guardianDetails'>;
@@ -174,9 +174,9 @@ export const AddPersonForm: React.FC<AddPersonFormProps> = ({ onSuccess }) => {
                 ...(category === PersonCategory.STUDENT && { guardianIds: selectedGuardians.map(g => g.id), guardianTempIds: newGuardians.map(g => g.tempId) }),
             };
             
-            await createPeople(accessToken, [mainPersonPayload, ...newGuardianPayload]);
+            const response = await createPeople(accessToken, [mainPersonPayload, ...newGuardianPayload]);
 
-            onSuccess();
+            onSuccess(response);
             resetForm();
         } catch (err) {
             setError(err instanceof Error ? err.message : "An unknown error occurred.");

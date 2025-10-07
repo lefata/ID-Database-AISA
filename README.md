@@ -299,6 +299,7 @@ If the script fails with a permission error, you may need to create the bucket m
 To allow the application to read Student IDs from your spreadsheet, you need to enable the Google Sheets API and make your sheet public.
 
 1.  **Enable the Google Sheets API:**
+    > **IMPORTANT:** This step is crucial for the Student ID lookup feature to work. If you skip this, a random ID will be assigned to new students, and you will see a warning in the app.
     -   Go to the [Google Cloud Console](https://console.cloud.google.com/).
     -   Select your project.
     -   Navigate to **APIs & Services** -> **Library**.

@@ -54,7 +54,7 @@ export const getPeople = (token: string, page: number, limit: number, search: st
     return fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${token}` } });
 };
 
-export const createPeople = (token: string, peopleData: (NewPersonData | any)[]): Promise<{ success: boolean }> => {
+export const createPeople = (token: string, peopleData: (NewPersonData | any)[]): Promise<{ success: boolean; warnings?: string[] }> => {
     return fetchWithTimeout('/api/people', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
