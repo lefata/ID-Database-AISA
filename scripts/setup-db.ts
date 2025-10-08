@@ -222,11 +222,6 @@ BEGIN
     DROP POLICY IF EXISTS "Allow admin/security to insert logs" ON public.access_logs; CREATE POLICY "Allow admin/security to insert logs" ON public.access_logs FOR INSERT WITH CHECK (is_admin_or_security());
     logs := logs || jsonb_build_object('status', 'success', 'step', 'Apply RLS Policies', 'details', 'RLS policies for all tables have been applied/re-applied.');
 
-    -- Storage Policies
-    DROP POLICY IF EXISTS "Allow authenticated uploads to avatars" ON storage.objects; CREATE POLICY "Allow authenticated uploads to avatars" ON storage.objects FOR INSERT TO authenticated WITH CHECK ( bucket_id = 'avatars' );
-    DROP POLICY IF EXISTS "Allow public read access to avatars" ON storage.objects; CREATE POLICY "Allow public read access to avatars" ON storage.objects FOR SELECT USING ( bucket_id = 'avatars' );
-    logs := logs || jsonb_build_object('status', 'success', 'step', 'Apply Storage Policies', 'details', 'Security policies for "avatars" bucket have been applied/re-applied.');
-
     RETURN logs;
 END;
 $$;
