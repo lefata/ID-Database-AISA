@@ -62,11 +62,6 @@ BEGIN
     DROP POLICY IF EXISTS "Allow admin/security to insert logs" ON public.access_logs; CREATE POLICY "Allow admin/security to insert logs" ON public.access_logs FOR INSERT WITH CHECK (is_admin_or_security());
     logs := logs || jsonb_build_object('status', 'success', 'step', 'Apply RLS Policies', 'details', 'RLS policies for all tables have been applied/re-applied.');
 
-    -- Admin Trigger
-    CREATE OR REPLACE FUNCTION public.grant_first_user_admin() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $trigger_func$ BEGIN IF (SELECT count(*) FROM auth.users) = 1 THEN UPDATE auth.users SET user_metadata = jsonb_set(COALESCE(user_metadata, '{}'::jsonb), '{role}', '"admin"'::jsonb), email_confirmed_at = NOW() WHERE id = NEW.id; END IF; RETURN NEW; END; $trigger_func$;
-    DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users; CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.grant_first_user_admin();
-    logs := logs || jsonb_build_object('status', 'success', 'step', 'Apply Admin Trigger', 'details', 'Trigger "on_auth_user_created" has been applied/re-applied.');
-    
     -- Storage Policies
     DROP POLICY IF EXISTS "Allow authenticated uploads to avatars" ON storage.objects; CREATE POLICY "Allow authenticated uploads to avatars" ON storage.objects FOR INSERT TO authenticated WITH CHECK ( bucket_id = 'avatars' );
     DROP POLICY IF EXISTS "Allow public read access to avatars" ON storage.objects; CREATE POLICY "Allow public read access to avatars" ON storage.objects FOR SELECT USING ( bucket_id = 'avatars' );
