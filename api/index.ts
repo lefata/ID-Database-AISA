@@ -63,10 +63,10 @@ BEGIN
     DROP POLICY IF EXISTS "Allow admin/security to insert logs" ON public.access_logs; CREATE POLICY "Allow admin/security to insert logs" ON public.access_logs FOR INSERT WITH CHECK (is_admin_or_security());
     logs := logs || jsonb_build_object('status', 'success', 'step', 'Apply RLS Policies', 'details', 'RLS policies for all tables have been applied/re-applied.');
 
-    -- Force PostgREST schema cache reload by re-granting usage on the schema.
-    -- This is a reliable way to signal that permissions may have changed.
-    GRANT USAGE ON SCHEMA public TO anon, authenticated;
-    logs := logs || jsonb_build_object('status', 'success', 'step', 'Invalidate API Schema Cache', 'details', 'Forced a reload of the API schema cache to apply changes.');
+    -- Force PostgREST schema cache reload by sending a notification.
+    -- This is the most direct way to signal a schema change.
+    NOTIFY pgrst, 'reload schema';
+    logs := logs || jsonb_build_object('status', 'success', 'step', 'Invalidate API Schema Cache', 'details', 'Signaled the API to reload its schema cache to apply changes.');
 
     RESET ROLE;
     RETURN logs;
