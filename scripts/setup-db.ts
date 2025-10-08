@@ -223,10 +223,11 @@ BEGIN
     DROP POLICY IF EXISTS "Allow admin/security to insert logs" ON public.access_logs; CREATE POLICY "Allow admin/security to insert logs" ON public.access_logs FOR INSERT WITH CHECK (is_admin_or_security());
     logs := logs || jsonb_build_object('status', 'success', 'step', 'Apply RLS Policies', 'details', 'RLS policies for all tables have been applied/re-applied.');
 
-    -- Force PostgREST schema cache reload by sending a notification.
-    -- This is the most direct way to signal a schema change.
-    NOTIFY pgrst, 'reload schema';
-    logs := logs || jsonb_build_object('status', 'success', 'step', 'Invalidate API Schema Cache', 'details', 'Signaled the API to reload its schema cache to apply changes.');
+    -- Force PostgREST schema cache reload by toggling RLS on a table.
+    -- This is a more robust method than NOTIFY in some multi-instance environments.
+    ALTER TABLE public.settings DISABLE ROW LEVEL SECURITY;
+    ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+    logs := logs || jsonb_build_object('status', 'success', 'step', 'Invalidate API Schema Cache', 'details', 'Forced API schema cache reload to apply all changes.');
 
     RESET ROLE;
     RETURN logs;
