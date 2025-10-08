@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { CogIcon } from './icons/CogIcon';
 import { ClipboardListIcon } from './icons/ClipboardListIcon';
+import { LocationMarkerIcon } from './icons/LocationMarkerIcon';
 
 type View = 'repository' | 'add' | 'admin' | 'access_control';
 
@@ -10,9 +11,10 @@ interface HeaderProps {
     onViewChange: (view: View) => void;
     isAdmin: boolean;
     isSecurity: boolean;
+    userLocation: string | null;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange, isAdmin, isSecurity }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange, isAdmin, isSecurity, userLocation }) => {
     const { user, logout } = useAuth();
     const activeClass = "bg-sky-600 text-white";
     const inactiveClass = "bg-white text-slate-600 hover:bg-slate-100";
@@ -29,6 +31,12 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onViewChange, isAdm
                     <h1 className="text-2xl font-bold text-slate-800">Synergy ID Repository</h1>
                 </div>
                 <div className="flex items-center space-x-4">
+                    {userLocation && (
+                         <div className="flex items-center space-x-2 text-sm text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full">
+                            <LocationMarkerIcon className="w-4 h-4 text-slate-500" />
+                            <span>Location: <strong>{userLocation}</strong></span>
+                        </div>
+                    )}
                     <nav className="flex space-x-1 bg-slate-200 p-1 rounded-lg">
                         <button
                             onClick={() => onViewChange('repository')}

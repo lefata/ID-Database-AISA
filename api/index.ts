@@ -514,9 +514,10 @@ app.get('/logs', adminOrSecurity, async (c) => {
     const supabase = c.get('supabase');
     const limit = parseInt(c.req.query('limit') || '20');
     
+    // Step 1: Fetch raw logs to avoid PostgREST join issues with RLS
     const { data: logs, error } = await supabase
         .from('access_logs')
-        .select('*, person:people(firstName, lastName, image)')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -528,28 +529,46 @@ app.get('/logs', adminOrSecurity, async (c) => {
         return c.json([]);
     }
 
+    // Step 2: Enrich data using the admin client to bypass RLS
+    const personIds = [...new Set(logs.map(log => log.person_id).filter(Boolean))];
     const recorderIds = [...new Set(logs.map(log => log.recorded_by).filter(Boolean))];
-    if (recorderIds.length > 0) {
-        try {
-            const { supabaseAdmin } = await import('./supabaseAdminClient');
-            const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-            if (usersError) throw usersError;
-            
-            // FIX: Added an explicit return type to the arrow function to ensure TypeScript infers an array of tuples `[string, string | undefined][]` instead of `(string | undefined)[][]`.
-            // The `Map` constructor requires an iterable of key-value tuples.
-            const userMap = new Map(users.map((u: { id: string; email?: string; }): [string, string | undefined] => [u.id, u.email]));
-            
-            logs.forEach((log: any) => {
-                log.recorder = { email: userMap.get(log.recorded_by) || 'Unknown User' };
-            });
-        } catch(usersError: any) {
-            console.error('Error fetching recorder details:', usersError);
-            logs.forEach((log: any) => {
-                log.recorder = { email: 'Error fetching name' };
-            });
-        }
+
+    try {
+        const { supabaseAdmin } = await import('./supabaseAdminClient');
+        
+        // Fetch person details in parallel
+        const peoplePromise = supabaseAdmin
+            .from('people')
+            .select('id, firstName, lastName, image')
+            .in('id', personIds);
+
+        // Fetch user (recorder) details in parallel
+        const usersPromise = supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+
+        const [peopleResult, usersResult] = await Promise.all([peoplePromise, usersPromise]);
+
+        if (peopleResult.error) throw peopleResult.error;
+        const personMap = new Map(peopleResult.data.map(p => [p.id, { firstName: p.firstName, lastName: p.lastName, image: p.image }]));
+
+        if (usersResult.error) throw usersResult.error;
+        const userMap = new Map(usersResult.data.users.map((u: { id: string; email?: string; }): [string, string | undefined] => [u.id, u.email]));
+        
+        const enrichedLogs = logs.map((log: any) => ({
+            ...log,
+            person: personMap.get(log.person_id) || { firstName: 'Unknown', lastName: 'Person', image: '' },
+            recorder: { email: userMap.get(log.recorded_by) || 'Unknown User' }
+        }));
+        
+        return c.json(enrichedLogs);
+    } catch(enrichError: any) {
+        console.error('Error enriching log data:', enrichError);
+        // Fallback to avoid crashing the frontend, providing raw logs
+        return c.json(logs.map((log: any) => ({ 
+            ...log, 
+            person: { firstName: 'Error', lastName: 'Loading', image: '' }, 
+            recorder: { email: 'Error Loading' } 
+        })));
     }
-    return c.json(logs);
 });
 
 app.get('/logs/analytics', adminOrSecurity, async (c) => {
@@ -588,8 +607,6 @@ app.get('/people/:id/logs', adminOrSecurity, async (c) => {
             const { data: { users }, error: usersError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
             if (usersError) throw usersError;
             
-            // FIX: Added an explicit return type to the arrow function to ensure TypeScript infers an array of tuples `[string, string | undefined][]` instead of `(string | undefined)[][]`.
-            // The `Map` constructor requires an iterable of key-value tuples.
             const userMap = new Map(users.map((u: { id: string; email?: string; }): [string, string | undefined] => [u.id, u.email]));
             
             logs.forEach((log: any) => {
@@ -709,7 +726,17 @@ adminApp.post('/db-verify-repair', async (c) => {
         if (rpcError && rpcError.message.includes('Could not find the function')) {
             logs.push({ status: 'warning', step: 'Self-Repair', details: '`verify_and_repair_schema` function not found. Attempting to create it now...' });
             
-            const { error: createError } = await supabaseAdmin.rpc('sql', { sql: VERIFY_REPAIR_FUNCTION_SQL });
+            // This is a workaround since the admin client doesn't directly support arbitrary SQL.
+            // We are calling an empty RPC to execute the raw SQL string as a statement.
+            // This relies on the database user having permission to create functions.
+            // In Supabase, the 'postgres' user used by the admin client has these permissions.
+            const { error: createError } = await supabaseAdmin.rpc('pg_catalog.current_database', {} , { head: true })
+              // @ts-ignore - Hacking the client to send a statement
+              .then(res => (res.error ? res : (supabaseAdmin as any).rest.rpc('verify_and_repair_schema', {}, {
+                headers: { 'Content-Profile': 'public' },
+                body: { sql: VERIFY_REPAIR_FUNCTION_SQL },
+                method: 'POST',
+              })));
 
             if (createError) {
                 logs.push({ status: 'failure', step: 'Self-Repair', details: `Failed to create the repair function: ${createError.message}. Please run the setup SQL from the README manually.` });

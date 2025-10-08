@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SpinnerIcon } from './components/icons/SpinnerIcon';
 import { getPeople, getSettings } from './services/apiService';
 import { WarningBanner } from './components/WarningBanner';
+import { LocationSelectionModal } from './components/LocationSelectionModal';
 
 type View = 'repository' | 'add' | 'admin' | 'access_control';
 const PAGE_LIMIT = 21;
@@ -25,6 +26,8 @@ const AppContent: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [warnings, setWarnings] = useState<string[]>([]);
+    const [userLocation, setUserLocation] = useState<string | null>(null);
+    const [needsLocation, setNeedsLocation] = useState(false);
 
     const sessionRef = useRef(session);
     sessionRef.current = session;
@@ -59,12 +62,29 @@ const AppContent: React.FC = () => {
     useEffect(() => {
         if (userId) {
             fetchAllData(1, searchTerm);
+            const userRole = session?.user?.user_metadata?.role;
+            if (userRole === 'security' || userRole === 'admin') {
+                const storedLocation = sessionStorage.getItem('userLocation');
+                if (storedLocation) {
+                    setUserLocation(storedLocation);
+                    setNeedsLocation(false);
+                } else {
+                    setNeedsLocation(true);
+                }
+            } else {
+                setNeedsLocation(false);
+                setUserLocation(null);
+                sessionStorage.removeItem('userLocation');
+            }
         } else if (!authLoading) {
             setIsLoading(false);
             setPeople([]);
             setTotalPeople(0);
+            setUserLocation(null);
+            setNeedsLocation(false);
+            sessionStorage.removeItem('userLocation');
         }
-    }, [userId, authLoading, searchTerm, fetchAllData]);
+    }, [userId, authLoading, searchTerm, fetchAllData, session]);
 
     const handleSuccess = useCallback((response?: { warnings?: string[] }) => {
         fetchAllData(currentPage, searchTerm);
@@ -83,6 +103,11 @@ const AppContent: React.FC = () => {
         fetchAllData(newPage, searchTerm);
     }, [searchTerm, fetchAllData]);
 
+    const handleLocationSet = (location: string) => {
+        setUserLocation(location);
+        sessionStorage.setItem('userLocation', location);
+        setNeedsLocation(false);
+    };
 
     if (authLoading) {
         return (
@@ -94,6 +119,10 @@ const AppContent: React.FC = () => {
 
     if (!session) {
         return <LoginPage />;
+    }
+
+    if (needsLocation) {
+        return <LocationSelectionModal onLocationSet={handleLocationSet} />;
     }
 
     const renderContent = () => {
@@ -125,7 +154,7 @@ const AppContent: React.FC = () => {
             case 'admin':
                 return isAdmin ? <AdminDashboard settings={settings} onSettingsUpdate={handleSuccess} /> : <div className="p-10 text-center">Access Denied.</div>;
             case 'access_control':
-                 return isAdmin || isSecurity ? <AccessControl /> : <div className="p-10 text-center">Access Denied.</div>;
+                 return isAdmin || isSecurity ? <AccessControl userLocation={userLocation} /> : <div className="p-10 text-center">Access Denied.</div>;
             default:
                 return null;
         }
@@ -133,7 +162,7 @@ const AppContent: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <Header currentView={view} onViewChange={setView} isAdmin={isAdmin} isSecurity={isSecurity} />
+            <Header currentView={view} onViewChange={setView} isAdmin={isAdmin} isSecurity={isSecurity} userLocation={userLocation} />
             <WarningBanner warnings={warnings} onDismiss={() => setWarnings([])} />
             <main>{renderContent()}</main>
         </div>
