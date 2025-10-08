@@ -580,12 +580,27 @@ app.get('/logs/analytics', adminOrSecurity, async (c) => {
 app.get('/people/:id/logs', adminOrSecurity, async (c) => {
     const supabase = c.get('supabase');
     const personId = c.req.param('id');
-    
-    const { data: logs, error } = await supabase
+    const { direction, startDate, endDate } = c.req.query();
+
+    let query = supabase
         .from('access_logs')
         .select('*')
-        .eq('person_id', personId)
-        .order('created_at', { ascending: false });
+        .eq('person_id', personId);
+    
+    if (direction && direction !== 'all') {
+        query = query.eq('direction', direction);
+    }
+    if (startDate) {
+        query = query.gte('created_at', new Date(startDate).toISOString());
+    }
+    if (endDate) {
+        // Add one day to include the entire end date
+        const inclusiveEndDate = new Date(endDate);
+        inclusiveEndDate.setDate(inclusiveEndDate.getDate() + 1);
+        query = query.lt('created_at', inclusiveEndDate.toISOString());
+    }
+
+    const { data: logs, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
         console.error(`Error fetching logs for person ${personId}:`, error);

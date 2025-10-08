@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Person, PersonAccessLog } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { SpinnerIcon } from './icons/SpinnerIcon';
-import { getPersonLogs } from '../services/apiService';
+import { getPersonLogs, LogFilters } from '../services/apiService';
 import { UserIcon } from './icons/UserIcon';
 import { EditIcon } from './icons/EditIcon';
 import { ArrowRightIcon } from './icons/ArrowRightIcon';
@@ -19,13 +19,18 @@ const AccessHistory: React.FC<{ personId: number }> = ({ personId }) => {
     const [logs, setLogs] = useState<PersonAccessLog[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [filters, setFilters] = useState<LogFilters>({
+        direction: 'all',
+        startDate: '',
+        endDate: '',
+    });
 
-    const fetchLogs = useCallback(async () => {
+    const fetchLogs = useCallback(async (currentFilters: LogFilters) => {
         if (!session?.access_token) return;
         setIsLoading(true);
         setError(null);
         try {
-            const data = await getPersonLogs(session.access_token, personId);
+            const data = await getPersonLogs(session.access_token, personId, currentFilters);
             setLogs(data);
         } catch (err: any) {
             setError(err.message);
@@ -35,37 +40,89 @@ const AccessHistory: React.FC<{ personId: number }> = ({ personId }) => {
     }, [personId, session]);
 
     useEffect(() => {
-        fetchLogs();
-    }, [fetchLogs]);
+        fetchLogs(filters);
+    }, [fetchLogs, filters]);
 
-    if (isLoading) {
-        return <div className="flex justify-center items-center py-8"><SpinnerIcon className="w-8 h-8 text-sky-600" /></div>;
-    }
-    if (error) {
-        return <div className="text-center text-red-600 py-8">Error loading logs: {error}</div>;
-    }
-    if (logs.length === 0) {
-        return <div className="text-center text-slate-500 py-8">No access history found for this person.</div>;
-    }
+    const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleResetFilters = () => {
+        setFilters({ direction: 'all', startDate: '', endDate: '' });
+    };
 
     return (
-        <div className="space-y-3">
-            {logs.map(log => (
-                <div key={log.id} className="flex items-center space-x-4 p-3 bg-slate-50 rounded-md">
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${log.direction === 'entry' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
-                        {log.direction === 'entry' ? <ArrowRightIcon className="w-5 h-5" /> : <ArrowLeftIcon className="w-5 h-5" />}
-                    </div>
-                    <div className="flex-1">
-                        <p className="font-semibold text-slate-800 capitalize">{log.direction} at <span className="font-normal">{log.location}</span></p>
-                        <p className="text-sm text-slate-500">Recorded by {log.recorder.email || 'Unknown'}</p>
-                    </div>
-                    <div className="text-right text-sm text-slate-500">
-                        <p>{new Date(log.created_at).toLocaleDateString()}</p>
-                        <p>{new Date(log.created_at).toLocaleTimeString()}</p>
-                    </div>
+        <>
+            <div className="flex flex-wrap items-end gap-4 p-4 bg-slate-100 rounded-lg mb-4">
+                <div>
+                    <label htmlFor="direction" className="block text-xs font-medium text-slate-600">Event Type</label>
+                    <select
+                        id="direction"
+                        name="direction"
+                        value={filters.direction}
+                        onChange={handleFilterChange}
+                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm rounded-md"
+                    >
+                        <option value="all">All</option>
+                        <option value="entry">Entry</option>
+                        <option value="exit">Exit</option>
+                    </select>
                 </div>
-            ))}
-        </div>
+                <div>
+                    <label htmlFor="startDate" className="block text-xs font-medium text-slate-600">Start Date</label>
+                    <input
+                        type="date"
+                        id="startDate"
+                        name="startDate"
+                        value={filters.startDate}
+                        onChange={handleFilterChange}
+                        className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
+                    />
+                </div>
+                <div>
+                    <label htmlFor="endDate" className="block text-xs font-medium text-slate-600">End Date</label>
+                    <input
+                        type="date"
+                        id="endDate"
+                        name="endDate"
+                        value={filters.endDate}
+                        onChange={handleFilterChange}
+                        className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm"
+                    />
+                </div>
+                <button
+                    onClick={handleResetFilters}
+                    className="px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition"
+                >
+                    Reset
+                </button>
+            </div>
+            {isLoading ? (
+                <div className="flex justify-center items-center py-8"><SpinnerIcon className="w-8 h-8 text-sky-600" /></div>
+            ) : error ? (
+                <div className="text-center text-red-600 py-8">Error loading logs: {error}</div>
+            ) : logs.length === 0 ? (
+                <div className="text-center text-slate-500 py-8">No access history found for the selected criteria.</div>
+            ) : (
+                <div className="space-y-3">
+                    {logs.map(log => (
+                        <div key={log.id} className="flex items-center space-x-4 p-3 bg-slate-50 rounded-md">
+                            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${log.direction === 'entry' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                                {log.direction === 'entry' ? <ArrowRightIcon className="w-5 h-5" /> : <ArrowLeftIcon className="w-5 h-5" />}
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-semibold text-slate-800 capitalize">{log.direction} at <span className="font-normal">{log.location}</span></p>
+                                <p className="text-sm text-slate-500">Recorded by {log.recorder.email || 'Unknown'}</p>
+                            </div>
+                            <div className="text-right text-sm text-slate-500">
+                                <p>{new Date(log.created_at).toLocaleDateString()}</p>
+                                <p>{new Date(log.created_at).toLocaleTimeString()}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </>
     );
 };
 

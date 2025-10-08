@@ -107,8 +107,22 @@ export const getRecentLogs = (token: string): Promise<AccessLog[]> => {
     return fetchWithTimeout('/api/logs', { headers: { 'Authorization': `Bearer ${token}` } });
 };
 
-export const getPersonLogs = (token: string, personId: number): Promise<PersonAccessLog[]> => {
-    return fetchWithTimeout(`/api/people/${personId}/logs`, { headers: { 'Authorization': `Bearer ${token}` } });
+export interface LogFilters {
+    direction: 'all' | 'entry' | 'exit';
+    startDate: string;
+    endDate: string;
+}
+
+export const getPersonLogs = (token: string, personId: number, filters: LogFilters): Promise<PersonAccessLog[]> => {
+    const params = new URLSearchParams();
+    if (filters.direction) params.append('direction', filters.direction);
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+    
+    const queryString = params.toString();
+    const url = `/api/people/${personId}/logs${queryString ? `?${queryString}` : ''}`;
+
+    return fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${token}` } });
 };
 
 export const getAnalytics = (token: string): Promise<AnalyticsData> => {
