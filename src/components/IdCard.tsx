@@ -53,7 +53,7 @@ export const IdCard: React.FC<IdCardProps> = ({ person, googleSheetId, onClick }
 
     return (
         <div 
-          className="bg-white rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 ease-in-out cursor-pointer"
+          className="bg-white rounded-xl shadow-lg overflow-hidden transform hover:scale-105 hover:shadow-xl transition-all duration-300 ease-in-out cursor-pointer"
           onClick={onClick}
         >
             <div className={`h-2 ${styles.bg}`}></div>
