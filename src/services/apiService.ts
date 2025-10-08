@@ -55,6 +55,21 @@ export const getPeople = (token: string, page: number, limit: number, search: st
     return fetchWithTimeout(url, { headers: { 'Authorization': `Bearer ${token}` } });
 };
 
+export const getPersonBySheetId = async (token: string, sheetId: string): Promise<Person | null> => {
+    try {
+        const response = await fetchWithTimeout(`/api/person-by-sheet-id/${encodeURIComponent(sheetId)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        return response;
+    } catch (error: any) {
+        if (error.status === 404) {
+            return null; // Return null if the person is not found, as expected
+        }
+        throw error; // Re-throw other unexpected errors
+    }
+};
+
+
 export const createPeople = (token: string, peopleData: (NewPersonData | any)[]): Promise<{ success: boolean; warnings?: string[] }> => {
     return fetchWithTimeout('/api/people', {
         method: 'POST',

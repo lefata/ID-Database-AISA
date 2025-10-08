@@ -1,22 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getPeople, logAccess, getRecentLogs, getAnalytics } from '../services/apiService';
+import { getPersonBySheetId, logAccess, getRecentLogs, getAnalytics } from '../services/apiService';
 import { Person, AccessLog, AnalyticsData } from '../types';
 import { SpinnerIcon } from '../components/icons/SpinnerIcon';
-import { SearchIcon } from '../components/icons/SearchIcon';
 import { ArrowRightIcon } from '../components/icons/ArrowRightIcon';
 import { ArrowLeftIcon } from '../components/icons/ArrowLeftIcon';
 import { XCircleIcon } from '../components/icons/XCircleIcon';
 import { BuildingOfficeIcon } from '../components/icons/BuildingOfficeIcon';
-import { LocationMarkerIcon } from '../components/icons/LocationMarkerIcon';
-
-const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
-    let timeout: ReturnType<typeof setTimeout>;
-    return (...args: Parameters<F>): void => {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func(...args), waitFor);
-    };
-};
+import { ProfileDisplay } from '../components/ProfileDisplay';
+import { QrCodeIcon } from '../components/icons/QrCodeIcon';
 
 interface AccessControlProps {
     userLocation: string | null;
@@ -41,20 +33,22 @@ const AnalyticsCard: React.FC<{ title: string; value: number | null; icon: React
 
 export const AccessControl: React.FC<AccessControlProps> = ({ userLocation }) => {
     const { session } = useAuth();
-    const [searchTerm, setSearchTerm] = useState('');
-    const [searchResults, setSearchResults] = useState<Person[]>([]);
+    const [sheetId, setSheetId] = useState('');
+    const [foundPerson, setFoundPerson] = useState<Person | null>(null);
     const [recentLogs, setRecentLogs] = useState<AccessLog[]>([]);
     const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-    const [isSearching, setIsSearching] = useState(false);
-    const [isLogging, setIsLogging] = useState<number | null>(null);
+    const [isLookingUp, setIsLookingUp] = useState(false);
+    const [isLogging, setIsLogging] = useState(false);
     const [successLog, setSuccessLog] = useState<{ personId: number; direction: 'entry' | 'exit' } | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [lookupError, setLookupError] = useState<string | null>(null);
     const [newLogIds, setNewLogIds] = useState<Set<number>>(new Set());
     
     const sessionRef = useRef(session);
     sessionRef.current = session;
+    const inputRef = useRef<HTMLInputElement>(null);
     
-    const fetchData = useCallback(async () => {
+    const fetchLiveData = useCallback(async () => {
         const accessToken = sessionRef.current?.access_token;
         if (!accessToken) return;
         try {
@@ -73,47 +67,53 @@ export const AccessControl: React.FC<AccessControlProps> = ({ userLocation }) =>
                 }
                 return logs;
             });
-
             setAnalytics(analyticsData);
         } catch (err) {
             console.error("Failed to fetch live data", err);
+            setError('Could not refresh live activity feed.');
         }
     }, []);
 
     useEffect(() => {
-        fetchData();
-        const interval = setInterval(fetchData, 10000); // Poll every 10 seconds
+        fetchLiveData();
+        const interval = setInterval(fetchLiveData, 10000); // Poll every 10 seconds
         return () => clearInterval(interval);
-    }, [fetchData]);
+    }, [fetchLiveData]);
 
-    const handleSearch = useCallback(async (term: string) => {
-        const accessToken = sessionRef.current?.access_token;
-        if (!accessToken || term.length < 2) {
-            setSearchResults([]);
-            setIsSearching(false);
-            return;
-        }
-        try {
-            const { people } = await getPeople(accessToken, 1, 10, term);
-            setSearchResults(people);
-        } catch (err) {
-            setError('Failed to search for people.');
-        } finally {
-            setIsSearching(false);
-        }
+    useEffect(() => {
+        // Auto-focus the input field on page load for quick scanning
+        inputRef.current?.focus();
     }, []);
-    
-    const debouncedSearch = useCallback(debounce(handleSearch, 300), [handleSearch]);
 
-    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const term = e.target.value;
-        setSearchTerm(term);
-        if (term.length > 1) {
-            setIsSearching(true);
-            debouncedSearch(term);
-        } else {
-            setIsSearching(false);
-            setSearchResults([]);
+    const resetLookup = () => {
+        setFoundPerson(null);
+        setSheetId('');
+        setLookupError(null);
+        inputRef.current?.focus();
+    };
+
+    const handleLookup = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const accessToken = sessionRef.current?.access_token;
+        if (!accessToken || !sheetId.trim()) return;
+
+        setIsLookingUp(true);
+        setLookupError(null);
+        setFoundPerson(null);
+
+        try {
+            const person = await getPersonBySheetId(accessToken, sheetId.trim());
+            if (person) {
+                setFoundPerson(person);
+            } else {
+                setLookupError(`No profile found for ID: ${sheetId.trim()}`);
+                setTimeout(() => resetLookup(), 3000);
+            }
+        } catch (err: any) {
+            setLookupError(`Error finding profile: ${err.message}`);
+            setTimeout(() => resetLookup(), 4000);
+        } finally {
+            setIsLookingUp(false);
         }
     };
     
@@ -126,21 +126,20 @@ export const AccessControl: React.FC<AccessControlProps> = ({ userLocation }) =>
             return;
         }
 
-        setIsLogging(personId);
+        setIsLogging(true);
         setError(null);
         try {
             await logAccess(accessToken, personId, direction, userLocation);
             setSuccessLog({ personId, direction });
-            setTimeout(() => setSuccessLog(null), 2000);
-            fetchData(); // Immediately refresh data after logging
+            setTimeout(() => {
+                setSuccessLog(null);
+                resetLookup();
+            }, 1500);
+            fetchLiveData(); // Immediately refresh data after logging
         } catch (err: any) {
-            if (err.message && (err.message.includes("Could not find the table") || err.message.includes("does not exist")) && err.message.toLowerCase().includes("access_logs")) {
-                setError(`Database Error: The access log table is missing. An administrator must go to the Admin Dashboard and run the "Verify & Repair Database" tool.`);
-            } else {
-                setError(`Failed to log ${direction}: ${err.message}`);
-            }
+            setError(`Failed to log ${direction}: ${err.message}`);
         } finally {
-            setIsLogging(null);
+            setIsLogging(false);
         }
     };
     
@@ -172,19 +171,6 @@ export const AccessControl: React.FC<AccessControlProps> = ({ userLocation }) =>
                     <h2 className="text-3xl font-bold text-slate-800">Access Control Dashboard</h2>
                     <p className="mt-1 text-slate-500">Log campus entries and exits and monitor live activity.</p>
                 </div>
-
-                {error && (
-                    <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4 rounded-r-md">
-                        <div className="flex">
-                            <div className="flex-shrink-0">
-                                <XCircleIcon className="h-5 w-5 text-red-400" />
-                            </div>
-                            <div className="ml-3">
-                                <p className="text-sm text-red-700">{error}</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
                 
                 <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
                     <AnalyticsCard title="Parents On Campus" value={analytics ? analytics.on_campus : null} icon={<BuildingOfficeIcon className="w-6 h-6 text-sky-600" />} />
@@ -196,41 +182,39 @@ export const AccessControl: React.FC<AccessControlProps> = ({ userLocation }) =>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2">
                         <div className="p-6 bg-white rounded-lg shadow-md">
-                            <h3 className="text-lg font-medium leading-6 text-slate-900 mb-4">Log Person</h3>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><SearchIcon className="text-slate-400" /></div>
-                                <input type="text" placeholder="Search by name..." value={searchTerm} onChange={handleSearchChange} className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
-                                {isSearching && <SpinnerIcon className="absolute right-3 top-3 w-5 h-5 text-slate-400" />}
-                            </div>
+                            <h3 className="text-lg font-medium leading-6 text-slate-900 mb-4">Scan or Enter ID</h3>
+                             <form onSubmit={handleLookup}>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><QrCodeIcon className="text-slate-400" /></div>
+                                    <input 
+                                        ref={inputRef}
+                                        type="text" 
+                                        placeholder="Scan barcode or enter ID (e.g., GS-12345)" 
+                                        value={sheetId} 
+                                        onChange={(e) => setSheetId(e.target.value)} 
+                                        className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg shadow-sm text-lg focus:outline-none focus:ring-2 focus:ring-sky-500" 
+                                    />
+                                </div>
+                             </form>
 
-                            <div className="mt-4 space-y-3 max-h-96 overflow-y-auto">
-                                {searchResults.map(person => (
-                                    <div key={person.id} className="p-4 bg-slate-50 rounded-lg border flex items-center justify-between space-x-4">
-                                        <div className="flex items-center space-x-4 flex-1">
-                                            <img src={person.image} alt="profile" className="w-16 h-16 rounded-full object-cover" />
-                                            <div>
-                                                <p className="font-bold text-slate-800">{person.firstName} {person.lastName}</p>
-                                                <p className="text-sm text-slate-500">{person.category} - {person.role || person.class}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex space-x-2">
-                                            {isLogging === person.id ? <SpinnerIcon className="w-6 h-6 text-sky-600" /> : successLog?.personId === person.id ? (
-                                                <p className={`font-bold text-lg ${successLog.direction === 'entry' ? 'text-emerald-500' : 'text-amber-500'}`}>{successLog.direction === 'entry' ? 'Entered!' : 'Exited!'}</p>
-                                            ) : (
-                                                <>
-                                                    <button onClick={() => handleLog(person.id, 'entry')} className="flex items-center justify-center space-x-2 w-32 px-4 py-2 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition">
-                                                        <ArrowRightIcon /><span>Log Entry</span>
-                                                    </button>
-                                                    <button onClick={() => handleLog(person.id, 'exit')} className="flex items-center justify-center space-x-2 w-32 px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg shadow-md hover:bg-amber-600 transition">
-                                                        <ArrowLeftIcon /><span>Log Exit</span>
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
+                            <div className="mt-6 flex items-center justify-center min-h-[350px] bg-slate-50 rounded-lg p-4">
+                                {isLookingUp ? (
+                                    <SpinnerIcon className="w-12 h-12 text-sky-600" />
+                                ) : lookupError ? (
+                                    <div className="text-center">
+                                        <XCircleIcon className="w-12 h-12 text-red-500 mx-auto" />
+                                        <p className="mt-2 font-semibold text-red-600">{lookupError}</p>
                                     </div>
-                                ))}
-                                {!isSearching && searchTerm.length > 1 && searchResults.length === 0 && (
-                                    <p className="text-center text-slate-500 py-4">No results found.</p>
+                                ) : foundPerson ? (
+                                    <ProfileDisplay 
+                                        person={foundPerson} 
+                                        userLocation={userLocation}
+                                        isLogging={isLogging}
+                                        successLog={successLog}
+                                        onLog={handleLog}
+                                    />
+                                ) : (
+                                    <p className="text-slate-500">Awaiting ID scan...</p>
                                 )}
                             </div>
                         </div>

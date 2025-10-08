@@ -289,6 +289,38 @@ const generateBio = async (ai: GoogleGenAI, firstName: string, lastName: string,
     }
 };
 
+async function enrichPeopleWithGuardians(supabase: SupabaseClient, people: any[]) {
+    if (!Array.isArray(people) || people.length === 0) {
+        return [];
+    }
+
+    const studentGuardianIds = people
+        .filter(p => p.category === PersonCategory.STUDENT && p.guardianIds?.length)
+        .flatMap(p => p.guardianIds);
+
+    if (studentGuardianIds.length > 0) {
+        const uniqueGuardianIds = [...new Set(studentGuardianIds)];
+        const { data: guardians, error: guardianError } = await supabase
+            .from('people')
+            .select('id, firstName, lastName, image')
+            .in('id', uniqueGuardianIds);
+
+        if (guardianError) {
+            console.error('Failed to fetch guardian details:', guardianError);
+        } else if (guardians) {
+            const guardianMap = new Map(guardians.map(g => [g.id, g]));
+            people.forEach((person: any) => {
+                if (person.category === PersonCategory.STUDENT && person.guardianIds) {
+                    person.guardianDetails = person.guardianIds
+                        .map((id: number) => guardianMap.get(id))
+                        .filter(Boolean);
+                }
+            });
+        }
+    }
+    return people;
+}
+
 
 // --- ROUTES ---
 app.get('/settings', async (c) => {
@@ -345,37 +377,35 @@ app.get('/people', async (c) => {
     return c.json({ error: `Failed to fetch people: ${error.message}` }, 500);
   }
   
-  if (!Array.isArray(people) || people.length === 0) {
-      return c.json({ people: [], total: count || 0 });
-  }
+  const enrichedPeople = await enrichPeopleWithGuardians(supabase, people);
 
-  const studentGuardianIds = people
-      .filter(p => p.category === PersonCategory.STUDENT && p.guardianIds?.length)
-      .flatMap(p => p.guardianIds);
-
-  if (studentGuardianIds.length > 0) {
-      const uniqueGuardianIds = [...new Set(studentGuardianIds)];
-      const { data: guardians, error: guardianError } = await supabase
-          .from('people')
-          .select('id, firstName, lastName, image')
-          .in('id', uniqueGuardianIds);
-
-      if (guardianError) {
-          console.error('Failed to fetch guardian details:', guardianError);
-      } else if (guardians) {
-          const guardianMap = new Map(guardians.map(g => [g.id, g]));
-          people.forEach((person: any) => {
-              if (person.category === PersonCategory.STUDENT && person.guardianIds) {
-                  person.guardianDetails = person.guardianIds
-                      .map((id: number) => guardianMap.get(id))
-                      .filter(Boolean);
-              }
-          });
-      }
-  }
-
-  return c.json({ people, total: count || 0 });
+  return c.json({ people: enrichedPeople, total: count || 0 });
 });
+
+app.get('/person-by-sheet-id/:sheetId', adminOrSecurity, async (c) => {
+    const supabase = c.get('supabase');
+    const sheetId = c.req.param('sheetId');
+
+    const { data: person, error } = await supabase
+        .from('people')
+        .select('*')
+        .eq('googleSheetId', sheetId)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Supabase fetch person by sheet ID error:', error);
+        return c.json({ error: `Failed to fetch person: ${error.message}` }, 500);
+    }
+
+    if (!person) {
+        return c.json({ error: 'Person not found' }, 404);
+    }
+
+    const [enrichedPerson] = await enrichPeopleWithGuardians(supabase, [person]);
+
+    return c.json(enrichedPerson);
+});
+
 
 app.get('/associates', async (c) => {
     const supabase = c.get('supabase');
